@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 byteorder = "1.5.0"
 miniz_oxide = "0.8.9"
+num_enum = "0.7.4"

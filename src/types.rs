@@ -1,29 +1,30 @@
 use byteorder::{LittleEndian, ReadBytesExt};
-
 use std::{
-    fs::File,
-    io::{self, Cursor, Read, Seek},
+    error::Error,
+    io::{Cursor, Read},
 };
+
+use crate::constants::ResourceType;
 
 macro_rules! read {
     ($file:expr, u8) => {
         $file.read_u8()?
     };
     ($file:expr, u16) => {
-        $file.read_u16::<byteorder::LittleEndian>()?
+        $file.read_u16::<LittleEndian>()?
     };
     ($file:expr, u32) => {
-        $file.read_u32::<byteorder::LittleEndian>()?
+        $file.read_u32::<LittleEndian>()?
     };
     ($file:expr, u64) => {
-        $file.read_u64::<byteorder::LittleEndian>()?
+        $file.read_u64::<LittleEndian>()?
     };
     ($file:expr, i32) => {
-        $file.read_i32::<byteorder::LittleEndian>()?
+        $file.read_i32::<LittleEndian>()?
     };
 }
 
-pub type AssetName = [char; 128];
+pub type AssetName = [u8; 128];
 
 struct AssetHeader {
     asset_type: u32,
@@ -37,11 +38,22 @@ struct ChunkLocator {
 
 struct HeaderEntry {
     name: AssetName,
+    res_type: ResourceType,
     unk_1: u32,
     unk_2: u32,
     chunk_count: u32,
     file_loc: ChunkLocator,
     res_loc: ChunkLocator,
+}
+
+impl std::fmt::Debug for HeaderEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name = match str::from_utf8(&self.name) {
+            Ok(s) => s.trim_matches('\x00'),
+            Err(_) => return Err(std::fmt::Error {}),
+        };
+        f.debug_struct("HeaderEntry").field("name", &name).finish()
+    }
 }
 
 #[derive(Debug)]
@@ -74,13 +86,13 @@ struct Chunk1 {
 // const u32 c1_count(m_header.chunk_1.size / sizeof(CHUNK_1_HEADER));
 
 impl BNLFile {
-    pub fn from_cursor(cur: &mut Cursor<Vec<u8>>) -> Result<BNLFile, io::Error> {
+    pub fn from_cursor(cur: &mut Cursor<Vec<u8>>) -> Result<BNLFile, Box<dyn Error>> {
         let mut header = BNLHeader {
             file_count: read!(cur, u16),
             flags: read!(cur, u8),
             unknown_2: [0, 0, 0, 0, 0],
         };
-        cur.read_exact(&mut header.unknown_2).unwrap();
+        cur.read_exact(&mut header.unknown_2)?;
 
         let locators: [ChunkLocator; 4] = [
             ChunkLocator {
@@ -100,6 +112,34 @@ impl BNLFile {
                 size: read!(cur, u32),
             },
         ];
+
+        let mut header_entries = Vec::new();
+
+        assert_eq!(size_of::<HeaderEntry>(), 160);
+
+        for _ in 0..(locators[0].size as usize / size_of::<HeaderEntry>()) {
+            let mut asset_name: AssetName = [0x00; 128];
+
+            cur.read_exact(&mut asset_name)?;
+
+            header_entries.push(HeaderEntry {
+                name: asset_name,
+                res_type: ResourceType::try_from(read!(cur, u32))?,
+                unk_1: read!(cur, u32),
+                unk_2: read!(cur, u32),
+                chunk_count: read!(cur, u32),
+                file_loc: ChunkLocator {
+                    offset: read!(cur, u32),
+                    size: read!(cur, u32),
+                },
+                res_loc: ChunkLocator {
+                    offset: read!(cur, u32),
+                    size: read!(cur, u32),
+                },
+            });
+        }
+
+        for entry in header_entries {}
 
         Ok(BNLFile {
             header,
