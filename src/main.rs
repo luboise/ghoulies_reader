@@ -7,7 +7,7 @@ fn main() {
     let args: Vec<String> = env::args().collect();
 
     if args.len() != 2 {
-        println!("Bad arg count (expected 2).");
+        print_usage();
         return;
     }
 
@@ -47,17 +47,13 @@ fn main() {
         Ok(_) => (),
         Err(e) => eprintln!("Unable to dump BNL file: {}", e),
     };
+}
 
-    /*
-    with open("bundles/aid_script/ghoulies_chapter1_scene1_2playcam.bnl", "rb") as f:
-        data = f.read()
-
-    data = data[:40] + zlib.decompress(data[40:])
-
-    data[:100]
-
-    with open("bundles/playcampy", "wb") as f:
-        f.write(data)
-
-    */
+fn print_usage() {
+    println!(
+        r"Usage: ghoulies_reader [path to BNL file].
+Example:
+    ghoulies_reader ./common.bnl
+    ghoulies_reader ./gbtg/bundles/common.bnl"
+    );
 }
