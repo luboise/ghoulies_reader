@@ -1,7 +1,7 @@
 mod constants;
 mod types;
 
-use std::{env, io::Cursor};
+use std::{env, io::Cursor, path::Path};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -35,7 +35,13 @@ fn main() {
 
     let bnl = types::BNLFile::from_cursor(&mut Cursor::new(decompressed));
 
-    dbg!(bnl);
+    let path = Path::new("./processed");
+
+    // std::fs::create_dir(path).unwrap();
+
+    // dbg!(bnl);
+
+    // bnl.dump(path);
 
     /*
     with open("bundles/aid_script/ghoulies_chapter1_scene1_2playcam.bnl", "rb") as f:

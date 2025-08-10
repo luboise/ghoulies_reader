@@ -2,7 +2,7 @@ use num_enum::{IntoPrimitive, TryFromPrimitive};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, TryFromPrimitive, IntoPrimitive)]
 #[repr(u32)]
-pub enum ResourceType {
+pub enum AssetType {
     ResTexture = 1,
     ResAnim = 2,
     ResUnknown3 = 3,
