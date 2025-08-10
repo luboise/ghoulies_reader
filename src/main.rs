@@ -41,9 +41,25 @@ fn main() {
         }
     };
 
-    let path = Path::new("./processed");
+    let out_path = Path::new("./processed").join(Path::new(&args[1]).file_stem().unwrap());
 
-    match bnl.dump(path) {
+    if !out_path.exists() {
+        match std::fs::create_dir_all(&out_path) {
+            Err(e) => {
+                eprintln!("Unable to create dir {}", &out_path.to_str().unwrap());
+                std::process::exit(1);
+            }
+            _ => (),
+        };
+    } else if out_path.is_file() {
+        eprintln!(
+            "Unable to extract to {} as a file already exists at that location.",
+            out_path.to_str().unwrap()
+        );
+        std::process::exit(1);
+    }
+
+    match bnl.dump(&out_path) {
         Ok(_) => (),
         Err(e) => eprintln!("Unable to dump BNL file: {}", e),
     };

@@ -2,7 +2,7 @@ use byteorder::{LittleEndian, ReadBytesExt};
 use std::{
     error::Error,
     io::{Cursor, Read, Seek, SeekFrom},
-    path::Path,
+    path::PathBuf,
 };
 
 use crate::constants::AssetType;
@@ -118,7 +118,7 @@ impl Asset {
 // const u32 c1_count(m_header.chunk_1.size / sizeof(CHUNK_1_HEADER));
 
 impl BNLFile {
-    pub fn dump(&self, path: &Path) -> Result<(), Box<dyn Error>> {
+    pub fn dump(&self, path: &PathBuf) -> Result<(), Box<dyn Error>> {
         println!("Dumping BNL file to {}", path.to_str().unwrap());
         if !path.exists() {
             println!("Creating output directory {}", path.to_str().unwrap());
