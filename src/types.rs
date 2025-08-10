@@ -105,18 +105,58 @@ struct Asset {
     resources: Vec<AssetResource>,
 }
 
+impl Asset {
+    fn name(&self) -> &str {
+        std::str::from_utf8(&self.name)
+            .unwrap_or("")
+            .split('\0')
+            .next()
+            .unwrap_or("")
+    }
+}
+
 // const u32 c1_count(m_header.chunk_1.size / sizeof(CHUNK_1_HEADER));
 
 impl BNLFile {
-    /*
-    pub fn dump(&self, path: Path) -> Result<(), Box<dyn Error>> {
-        for entry in &self.header_entries {}
+    pub fn dump(&self, path: &Path) -> Result<(), Box<dyn Error>> {
+        println!("Dumping BNL file to {}", path.to_str().unwrap());
+        if !path.exists() {
+            println!("Creating output directory {}", path.to_str().unwrap());
+            std::fs::create_dir(path)?;
+        } else if path.is_file() {
+            eprintln!(
+                "Error: Unable to dump BNL file because the output directory, \"{}\" exists as a file.",
+                path.to_str().unwrap()
+            );
+        }
+
+        for asset in &self.assets {
+            let asset_folder = path.join(asset.name());
+
+            if !asset_folder.exists() {
+                std::fs::create_dir(&asset_folder)?;
+            }
+
+            for (i, resource) in asset.resources.iter().enumerate() {
+                let file_path = asset_folder.join(format!("resource{}", i));
+                if file_path.exists() && file_path.is_dir() {
+                    eprintln!(
+                        "Error: Path {} already exists but is a directory.",
+                        file_path.to_str().unwrap()
+                    );
+                    panic!();
+                }
+
+                println!("Writing {}", file_path.to_str().unwrap());
+                std::fs::write(file_path, &resource.data.as_slice())?;
+            }
+        }
 
         Ok(())
     }
-    */
 
     pub fn from_cursor(cur: &mut Cursor<Vec<u8>>) -> Result<BNLFile, Box<dyn Error>> {
+        println!("Reading BNL file.");
         let mut header = BNLHeader {
             file_count: read!(cur, u16),
             flags: read!(cur, u8),
@@ -143,9 +183,13 @@ impl BNLFile {
             },
         ];
 
+        println!("Headers processed successfully");
+
         let mut assets = Vec::new();
 
         assert_eq!(size_of::<HeaderEntry>(), 160);
+
+        println!("Beginning asset reading");
 
         for _ in 0..(locators[0].size as usize / size_of::<HeaderEntry>()) {
             let mut asset_name: AssetName = [0x00; 128];
@@ -171,6 +215,8 @@ impl BNLFile {
                 resources: Vec::new(),
             };
 
+            print!("{} ", asset.name());
+
             let mut res_cur = cur.clone();
             res_cur.seek(SeekFrom::Start(
                 (asset.res_loc.offset + locators[1].offset) as u64,
@@ -179,12 +225,7 @@ impl BNLFile {
             asset.resources_size = read!(res_cur, u32);
             asset.resource_count = read!(res_cur, u32);
 
-            println!("Reading asset {}", str::from_utf8(&asset.name)?);
-
-            // Go to resource offset, and get the resource list
-
-            println!("Beginning asset reading...");
-            for i in 0..asset.resource_count {
+            for _ in 0..asset.resource_count {
                 // Read the offset and size of the resource
                 let mut resource = AssetResource {
                     offset: read!(res_cur, u32),
@@ -204,10 +245,6 @@ impl BNLFile {
                 data_cur.read_exact(resource.data.as_mut_slice())?;
 
                 asset.resources.push(resource);
-            }
-
-            if asset.resource_count > 1 {
-                println!("Resource count: {}", &asset.resource_count);
             }
 
             assets.push(asset);

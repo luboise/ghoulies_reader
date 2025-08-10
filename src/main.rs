@@ -33,15 +33,20 @@ fn main() {
         }
     };
 
-    let bnl = types::BNLFile::from_cursor(&mut Cursor::new(decompressed));
+    let bnl = match types::BNLFile::from_cursor(&mut Cursor::new(decompressed)) {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("Unable to process BNL file: {}", e);
+            std::process::exit(1);
+        }
+    };
 
     let path = Path::new("./processed");
 
-    // std::fs::create_dir(path).unwrap();
-
-    // dbg!(bnl);
-
-    // bnl.dump(path);
+    match bnl.dump(path) {
+        Ok(_) => (),
+        Err(e) => eprintln!("Unable to dump BNL file: {}", e),
+    };
 
     /*
     with open("bundles/aid_script/ghoulies_chapter1_scene1_2playcam.bnl", "rb") as f:
