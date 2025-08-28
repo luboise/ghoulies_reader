@@ -3,6 +3,8 @@ mod types;
 
 use std::{env, io::Cursor, path::Path};
 
+use crate::types::{BNLFile, asset::texture::Texture};
+
 fn main() {
     let args: Vec<String> = env::args().collect();
 
@@ -33,7 +35,7 @@ fn main() {
         }
     };
 
-    let bnl = match types::BNLFile::from_cursor(&mut Cursor::new(decompressed)) {
+    let bnl = match BNLFile::from_cursor(&mut Cursor::new(decompressed)) {
         Ok(b) => b,
         Err(e) => {
             eprintln!("Unable to process BNL file: {}", e);
@@ -41,6 +43,15 @@ fn main() {
         }
     };
 
+    dbg!(&bnl.asset_descriptions());
+
+    let tex = bnl
+        .get_asset::<Texture>("aid_texture_ghoulies_gameselect_challenges_bedtimegory")
+        .expect("Unable to get texture");
+
+    dbg!(tex);
+
+    /*
     let out_path = Path::new("./processed").join(Path::new(&args[1]).file_stem().unwrap());
 
     if !out_path.exists() {
@@ -58,11 +69,14 @@ fn main() {
         );
         std::process::exit(1);
     }
+    */
 
+    /*
     match bnl.dump(&out_path) {
         Ok(_) => (),
         Err(e) => eprintln!("Unable to dump BNL file: {}", e),
     };
+    */
 }
 
 fn print_usage() {
