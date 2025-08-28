@@ -1,6 +1,8 @@
 mod constants;
 mod types;
 
+pub mod image;
+
 use std::{env, io::Cursor, path::Path};
 
 use crate::types::{
@@ -48,8 +50,8 @@ fn main() {
 
     let textures = bnl.get_assets::<Texture>();
     textures.iter().for_each(|t| {
-        t.dump(Path::new("./out")).unwrap_or_else(|_| {
-            eprintln!("Failed to dump \"{}\"", t.name());
+        t.dump(Path::new("./out")).unwrap_or_else(|e| {
+            eprintln!("Failed to dump \"{}\"\n    Error: {}", t.name(), e);
         });
     });
 }

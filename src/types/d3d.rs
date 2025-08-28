@@ -1,4 +1,4 @@
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LinearColour {
     A1R5G5B5 = 0x00000010,
     A4R4G4B4 = 0x0000001D,
@@ -17,7 +17,7 @@ pub enum LinearColour {
     X8R8G8B8 = 0x0000001E,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 enum LinearLuminance {
     A8L8 = 0x00000020,
     AL8 = 0x0000001B,
@@ -36,8 +36,8 @@ enum LinearLuminance {
     F16 = 0x00000031,
 }
 
-#[derive(Debug, Clone)]
-enum Swizzled {
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Swizzled {
     /* Swizzled formats */
     A8R8G8B8 = 0x00000006,
     X8R8G8B8 = 0x00000007,
@@ -56,7 +56,7 @@ enum Swizzled {
     G8B8 = 0x00000028,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum StandardFormat {
     Unknown = 0xFFFFFFFF,
 
@@ -88,8 +88,8 @@ pub enum StandardFormat {
     DXT4Or5 = 0x0000000F,
 }
 
-#[derive(Debug, Clone)]
 #[repr(u32)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum D3DFormat {
     Swizzled(Swizzled),
     Luminance(LinearLuminance),
