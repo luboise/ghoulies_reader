@@ -1,4 +1,4 @@
-use anyxplore::format::image::{dxt1::DXT1, dxt2::DXT2};
+use nannou::image::{ImageDecoder, dxt::DXTVariant};
 
 use crate::types::d3d::{D3DFormat, LinearColour, StandardFormat, Swizzled};
 
@@ -16,9 +16,27 @@ pub fn transcode(
     match src_format {
         D3DFormat::Standard(StandardFormat::DXT1) => match dst_format {
             D3DFormat::Linear(LinearColour::R8G8B8A8) => {
-                let dxt = DXT1::from_bytes(bytes, width as u32, height as u32)?;
+                let decoder = nannou::image::codecs::dxt::DxtDecoder::new(
+                    bytes,
+                    width as u32,
+                    height as u32,
+                    DXTVariant::DXT1,
+                )
+                .expect("");
 
-                Ok(dxt.as_rgba_bytes())
+                let mut buf = vec![0u8; width * height * 3];
+                decoder
+                    .read_image(&mut buf)
+                    .map_err(std::io::Error::other)?;
+
+                let mut bytes = vec![];
+
+                for chunk in buf.chunks(3) {
+                    bytes.extend_from_slice(chunk);
+                    bytes.push(u8::MAX);
+                }
+
+                Ok(bytes)
             }
             _ => Err(std::io::Error::other(
                 "Unsupported destination format for transcoding.",
@@ -27,9 +45,20 @@ pub fn transcode(
 
         D3DFormat::Standard(StandardFormat::DXT2Or3) => match dst_format {
             D3DFormat::Linear(LinearColour::R8G8B8A8) => {
-                let dxt = DXT2::from_bytes(bytes, width as u32, height as u32)?;
+                let decoder = nannou::image::codecs::dxt::DxtDecoder::new(
+                    bytes,
+                    width as u32,
+                    height as u32,
+                    DXTVariant::DXT3,
+                )
+                .expect("");
 
-                Ok(dxt.as_rgba_bytes())
+                let mut buf = vec![0u8; width * height * 4];
+                decoder
+                    .read_image(&mut buf)
+                    .map_err(std::io::Error::other)?;
+
+                Ok(buf)
             }
             _ => Err(std::io::Error::other(
                 "Unsupported destination format for transcoding.",
