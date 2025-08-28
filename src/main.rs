@@ -47,7 +47,8 @@ fn main() {
         .get_asset::<Texture>("aid_texture_ghoulies_gameselect_challenges_bedtimegory")
         .expect("Unable to get texture");
 
-    dbg!(&tex);
+    tex.dump(Path::new("./"))
+        .expect("Unable to export texture.");
 
     /*
     let out_path = Path::new("./processed").join(Path::new(&args[1]).file_stem().unwrap());

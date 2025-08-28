@@ -1,3 +1,5 @@
+use std::fmt;
+
 use crate::types::{ChunkLocator, game::AssetType};
 
 pub mod texture;
@@ -10,28 +12,32 @@ pub struct BufferViewList {
 }
 
 impl BufferViewList {
-    pub fn from_bytes(bytes: &[u8]) -> Result<BufferViewList, Box<std::io::Error>> {
-        if bytes.len() < 8 {
+    pub fn from_bytes(
+        view_bytes: &[u8],
+        resource_bytes: &[u8],
+    ) -> Result<BufferViewList, Box<std::io::Error>> {
+        if view_bytes.len() < 8 {
             return Err(Box::new(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 "Data not long enough",
             )));
         };
 
-        let mut size: u32 = 0;
-        let mut num_views: u32 = 0;
+        let b = view_bytes[0..4]
+            .try_into()
+            .expect("slice with incorrect length");
+        let size = u32::from_le_bytes(b);
 
-        let b = bytes[0..4].try_into().expect("slice with incorrect length");
-        size = u32::from_le_bytes(b);
-
-        let b = bytes[4..8].try_into().expect("slice with incorrect length");
-        num_views = u32::from_le_bytes(b);
+        let b = view_bytes[4..8]
+            .try_into()
+            .expect("slice with incorrect length");
+        let num_views = u32::from_le_bytes(b);
 
         if num_views == 0 || size != num_views * size_of::<ChunkLocator>() as u32 + 8 {
             return Err(Box::new(std::io::Error::other("Invalid size.")));
         }
 
-        if bytes.len() < num_views as usize * size_of::<ChunkLocator>() {
+        if view_bytes.len() < num_views as usize * size_of::<ChunkLocator>() {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 "Input is not large enough.",
@@ -41,18 +47,22 @@ impl BufferViewList {
 
         let mut views = Vec::with_capacity(num_views as usize);
 
-        let mut chunks = bytes[8..].chunks(size_of::<ChunkLocator>());
+        let mut chunks = view_bytes[8..].chunks(size_of::<ChunkLocator>());
 
-        for i in 0..num_views {
+        for _ in 0..num_views {
             let chunk = chunks.next().unwrap();
 
             let view_offset = u32::from_le_bytes(chunk[0..4].try_into().unwrap());
             let view_size = u32::from_le_bytes(chunk[4..8].try_into().unwrap());
 
+            let data = resource_bytes
+                [(view_offset as usize)..(view_offset as usize + view_size as usize)]
+                .to_vec();
+
             views.push(BufferView {
                 offset: view_offset,
                 size: view_size,
-                data: Default::default(),
+                data,
             });
         }
 
@@ -85,6 +95,18 @@ pub enum AssetError {
     AssetNameNotFound,
 }
 
+impl fmt::Display for AssetError {
+    // This trait requires `fmt` with this exact signature.
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // Write strictly the first element into the supplied output
+        // stream: `f`. Returns `fmt::Result` which indicates whether the
+        // operation succeeded or failed. Note that `write!` uses syntax which
+        // is very similar to `println!`.
+        write!(f, "Asset error")?;
+        Ok(())
+    }
+}
+
 impl From<AssetParseError> for AssetError {
     fn from(err: AssetParseError) -> Self {
         AssetError::AssetParseError(err)
@@ -99,9 +121,15 @@ pub trait Asset: Sized {
     type Descriptor: AssetDescriptor;
 
     fn descriptor(&self) -> &Self::Descriptor;
-    fn new(descriptor: &Self::Descriptor, views: &BufferViewList) -> Result<Self, AssetParseError>;
+    fn new(
+        name: &str,
+        descriptor: &Self::Descriptor,
+        views: &BufferViewList,
+    ) -> Result<Self, AssetParseError>;
 
     fn asset_type() -> AssetType;
 
     fn buffer_views(&self) -> &BufferViewList;
+
+    fn name(&self) -> &str;
 }

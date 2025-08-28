@@ -1,6 +1,12 @@
+use std::{
+    fs::File,
+    io::BufWriter,
+    path::{Path, PathBuf},
+};
+
 use crate::types::{
-    asset::{Asset, AssetDescriptor, AssetError, AssetParseError, BufferView, BufferViewList},
-    d3d::{D3DFormat, LinearColour, StandardFormat},
+    asset::{Asset, AssetDescriptor, AssetError, AssetParseError, BufferViewList},
+    d3d::{D3DFormat, LinearColour},
     game::AssetType,
 };
 
@@ -20,6 +26,7 @@ pub struct TextureDescriptor {
 
 #[derive(Debug)]
 pub struct Texture {
+    name: String,
     descriptor: TextureDescriptor,
     views: BufferViewList,
 }
@@ -60,8 +67,13 @@ impl AssetDescriptor for TextureDescriptor {
 impl Asset for Texture {
     type Descriptor = TextureDescriptor;
 
-    fn new(descriptor: &Self::Descriptor, views: &BufferViewList) -> Result<Self, AssetParseError> {
+    fn new(
+        name: &str,
+        descriptor: &Self::Descriptor,
+        views: &BufferViewList,
+    ) -> Result<Self, AssetParseError> {
         Ok(Texture {
+            name: name.to_string(),
             descriptor: descriptor.clone(),
             views: views.clone(),
         })
@@ -77,5 +89,54 @@ impl Asset for Texture {
 
     fn buffer_views(&self) -> &BufferViewList {
         &self.views
+    }
+
+    fn name(&self) -> &str {
+        &self.name
+    }
+}
+
+impl Texture {
+    pub fn dump(&self, path: &Path) -> Result<(), std::io::Error> {
+        let mut p: PathBuf = path.to_path_buf();
+
+        if p.is_dir() {
+            p = p.join(format!("{}.png", self.name()));
+        }
+
+        let file = File::create(p).unwrap();
+        let w = &mut BufWriter::new(file);
+
+        let mut encoder = png::Encoder::new(
+            w,
+            self.descriptor.width as u32,
+            self.descriptor.height as u32,
+        ); // Width is 2 pixels and height is 1.
+
+        let use_rgba = true;
+
+        encoder.set_color(match use_rgba {
+            true => png::ColorType::Rgba,
+            false => png::ColorType::Rgb,
+        });
+        encoder.set_depth(png::BitDepth::Eight);
+
+        // encoder.set_source_gamma(png::ScaledFloat::new(1.0 / 2.2));
+        /*
+        let chroma = png::SourceChromaticities::new(
+            (0.3127, 0.3290), // red
+            (0.6400, 0.3300), // green
+            (0.3000, 0.6000), // blue
+            (0.1500, 0.0600), // white
+        );
+        encoder.set_source_chromaticities(chroma);
+        */
+
+        let mut writer = encoder.write_header().unwrap();
+
+        writer.write_image_data(&self.views.views[0].data).unwrap();
+        writer.finish().expect("Unable to close writer.");
+
+        Ok(())
     }
 }

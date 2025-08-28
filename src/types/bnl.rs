@@ -128,6 +128,7 @@ impl BNLFile {
     pub fn get_bufferview_list(&self, offset: usize) -> Result<BufferViewList, Box<dyn Error>> {
         Ok(BufferViewList::from_bytes(
             &self.buffer_views_bytes[offset..],
+            &self.buffer_bytes,
         )?)
     }
 
@@ -151,13 +152,49 @@ impl BNLFile {
                     .get_bufferview_list(asset_desc.bufferview_list_ptr as usize)
                     .expect("Unable to get BufferView list");
 
-                let asset = A::new(&descriptor, &bv)?;
+                let asset = A::new(asset_desc.name(), &descriptor, &bv)?;
 
                 return Ok(asset);
             }
         }
 
         Err(AssetError::AssetNameNotFound)
+    }
+
+    pub fn get_assets<A: Asset>(&self) -> Vec<A> {
+        let assets = Vec::new();
+
+        for asset_desc in &self.asset_descriptions {
+            if asset_desc.asset_type() != A::asset_type() {
+                continue;
+            }
+
+            let descriptor_ptr: usize = asset_desc.descriptor_ptr() as usize;
+            let desc_slice = &self.descriptor_bytes[descriptor_ptr..];
+
+            let descriptor: A::Descriptor = match A::Descriptor::from_bytes(desc_slice) {
+                Ok(_) => todo!(),
+                Err(e) => {
+                    eprintln!(
+                        "Error getting asset descriptor for {}\nError: {}",
+                        asset_desc.name(),
+                        e
+                    );
+                    continue;
+                }
+            };
+
+            let bv = self
+                .get_bufferview_list(asset_desc.bufferview_list_ptr as usize)
+                .expect("Unable to get BufferView list");
+
+            match A::new(asset_desc.name(), &descriptor, &bv) {
+                Ok(a) => assets.push(a),
+                Err(_) => eprintln!("Failed to load asset \"{}\"", asset_desc.name()),
+            };
+        }
+
+        assets
     }
 
     pub fn from_cursor(cur: &mut Cursor<Vec<u8>>) -> Result<BNLFile, Box<dyn Error>> {
