@@ -162,7 +162,7 @@ impl BNLFile {
     }
 
     pub fn get_assets<A: Asset>(&self) -> Vec<A> {
-        let assets = Vec::new();
+        let mut assets = Vec::new();
 
         for asset_desc in &self.asset_descriptions {
             if asset_desc.asset_type() != A::asset_type() {
@@ -173,7 +173,7 @@ impl BNLFile {
             let desc_slice = &self.descriptor_bytes[descriptor_ptr..];
 
             let descriptor: A::Descriptor = match A::Descriptor::from_bytes(desc_slice) {
-                Ok(_) => todo!(),
+                Ok(d) => d,
                 Err(e) => {
                     eprintln!(
                         "Error getting asset descriptor for {}\nError: {}",

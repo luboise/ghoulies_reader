@@ -134,8 +134,8 @@ impl Texture {
 
         let mut writer = encoder.write_header().unwrap();
 
-        writer.write_image_data(&self.views.views[0].data).unwrap();
-        writer.finish().expect("Unable to close writer.");
+        writer.write_image_data(&self.views.views[0].data)?;
+        writer.finish().expect("Unable to close writer");
 
         Ok(())
     }

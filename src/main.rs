@@ -3,7 +3,10 @@ mod types;
 
 use std::{env, io::Cursor, path::Path};
 
-use crate::types::{BNLFile, asset::texture::Texture};
+use crate::types::{
+    BNLFile,
+    asset::{Asset, texture::Texture},
+};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -43,39 +46,12 @@ fn main() {
         }
     };
 
-    let tex = bnl
-        .get_asset::<Texture>("aid_texture_ghoulies_gameselect_challenges_bedtimegory")
-        .expect("Unable to get texture");
-
-    tex.dump(Path::new("./"))
-        .expect("Unable to export texture.");
-
-    /*
-    let out_path = Path::new("./processed").join(Path::new(&args[1]).file_stem().unwrap());
-
-    if !out_path.exists() {
-        match std::fs::create_dir_all(&out_path) {
-            Err(e) => {
-                eprintln!("Unable to create dir {}", &out_path.to_str().unwrap());
-                std::process::exit(1);
-            }
-            _ => (),
-        };
-    } else if out_path.is_file() {
-        eprintln!(
-            "Unable to extract to {} as a file already exists at that location.",
-            out_path.to_str().unwrap()
-        );
-        std::process::exit(1);
-    }
-    */
-
-    /*
-    match bnl.dump(&out_path) {
-        Ok(_) => (),
-        Err(e) => eprintln!("Unable to dump BNL file: {}", e),
-    };
-    */
+    let textures = bnl.get_assets::<Texture>();
+    textures.iter().for_each(|t| {
+        t.dump(Path::new("./out")).unwrap_or_else(|_| {
+            eprintln!("Failed to dump \"{}\"", t.name());
+        });
+    });
 }
 
 fn print_usage() {
