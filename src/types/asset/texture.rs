@@ -21,7 +21,7 @@ pub struct TextureDescriptor {
 #[derive(Debug)]
 pub struct Texture {
     descriptor: TextureDescriptor,
-    data: Vec<u8>,
+    views: BufferViewList,
 }
 
 impl AssetDescriptor for TextureDescriptor {
@@ -57,17 +57,14 @@ impl AssetDescriptor for TextureDescriptor {
     }
 }
 
-impl Texture {
-    pub fn asset_type(&self) -> AssetType {
-        AssetType::ResTexture
-    }
-}
-
 impl Asset for Texture {
     type Descriptor = TextureDescriptor;
 
     fn new(descriptor: &Self::Descriptor, views: &BufferViewList) -> Result<Self, AssetParseError> {
-        todo!("a");
+        Ok(Texture {
+            descriptor: descriptor.clone(),
+            views: views.clone(),
+        })
     }
 
     fn descriptor(&self) -> &Self::Descriptor {
@@ -78,7 +75,7 @@ impl Asset for Texture {
         AssetType::ResTexture
     }
 
-    fn buffer_views(&self) -> &Vec<BufferView> {
-        todo!()
+    fn buffer_views(&self) -> &BufferViewList {
+        &self.views
     }
 }

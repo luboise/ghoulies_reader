@@ -2,7 +2,7 @@ use crate::types::{ChunkLocator, game::AssetType};
 
 pub mod texture;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BufferViewList {
     size: u32,
     num_views: u32,
@@ -21,9 +21,14 @@ impl BufferViewList {
         let mut size: u32 = 0;
         let mut num_views: u32 = 0;
 
-        if let Ok(b) = bytes[0..8].try_into() {
-            size = u32::from_le_bytes(b);
-            num_views = u32::from_le_bytes(b[4..].try_into().unwrap());
+        let b = bytes[0..4].try_into().expect("slice with incorrect length");
+        size = u32::from_le_bytes(b);
+
+        let b = bytes[4..8].try_into().expect("slice with incorrect length");
+        num_views = u32::from_le_bytes(b);
+
+        if num_views == 0 || size != num_views * size_of::<ChunkLocator>() as u32 + 8 {
+            return Err(Box::new(std::io::Error::other("Invalid size.")));
         }
 
         if bytes.len() < num_views as usize * size_of::<ChunkLocator>() {
@@ -36,18 +41,20 @@ impl BufferViewList {
 
         let mut views = Vec::with_capacity(num_views as usize);
 
-        bytes[8..]
-            .chunks(size_of::<ChunkLocator>())
-            .for_each(|chunk| {
-                let view_offset = u32::from_le_bytes(chunk[0..4].try_into().unwrap());
-                let view_size = u32::from_le_bytes(chunk[4..8].try_into().unwrap());
+        let mut chunks = bytes[8..].chunks(size_of::<ChunkLocator>());
 
-                views.push(BufferView {
-                    offset: view_offset,
-                    size: view_size,
-                    data: Default::default(),
-                });
+        for i in 0..num_views {
+            let chunk = chunks.next().unwrap();
+
+            let view_offset = u32::from_le_bytes(chunk[0..4].try_into().unwrap());
+            let view_size = u32::from_le_bytes(chunk[4..8].try_into().unwrap());
+
+            views.push(BufferView {
+                offset: view_offset,
+                size: view_size,
+                data: Default::default(),
             });
+        }
 
         Ok(BufferViewList {
             size,
@@ -57,7 +64,7 @@ impl BufferViewList {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BufferView {
     offset: u32,
     size: u32,
@@ -96,5 +103,5 @@ pub trait Asset: Sized {
 
     fn asset_type() -> AssetType;
 
-    fn buffer_views(&self) -> &Vec<BufferView>;
+    fn buffer_views(&self) -> &BufferViewList;
 }

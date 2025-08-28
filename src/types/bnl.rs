@@ -149,7 +149,7 @@ impl BNLFile {
 
                 let bv = self
                     .get_bufferview_list(asset_desc.bufferview_list_ptr as usize)
-                    .expect("Unable to get BufferView list.");
+                    .expect("Unable to get BufferView list");
 
                 let asset = A::new(&descriptor, &bv)?;
 
