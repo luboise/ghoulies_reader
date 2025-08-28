@@ -8,3 +8,5 @@ byteorder = "1.5.0"
 miniz_oxide = "0.8.9"
 num_enum = "0.7.4"
 png = "0.17.16"
+
+anyxplore = { path = "../anyxplore/lib" }

@@ -1,4 +1,6 @@
-use crate::types::d3d::{D3DFormat, LinearColour, Swizzled};
+use anyxplore::format::image::{dxt1::DXT1, dxt2::DXT2};
+
+use crate::types::d3d::{D3DFormat, LinearColour, StandardFormat, Swizzled};
 
 pub fn transcode(
     width: usize,
@@ -12,6 +14,28 @@ pub fn transcode(
     }
 
     match src_format {
+        D3DFormat::Standard(StandardFormat::DXT1) => match dst_format {
+            D3DFormat::Linear(LinearColour::R8G8B8A8) => {
+                let dxt = DXT1::from_bytes(bytes, width as u32, height as u32)?;
+
+                Ok(dxt.as_rgba_bytes())
+            }
+            _ => Err(std::io::Error::other(
+                "Unsupported destination format for transcoding.",
+            )),
+        },
+
+        D3DFormat::Standard(StandardFormat::DXT2Or3) => match dst_format {
+            D3DFormat::Linear(LinearColour::R8G8B8A8) => {
+                let dxt = DXT2::from_bytes(bytes, width as u32, height as u32)?;
+
+                Ok(dxt.as_rgba_bytes())
+            }
+            _ => Err(std::io::Error::other(
+                "Unsupported destination format for transcoding.",
+            )),
+        },
+
         D3DFormat::Swizzled(Swizzled::A8B8G8R8) => match dst_format {
             D3DFormat::Linear(LinearColour::R8G8B8A8) => {
                 let mut ret_bytes = bytes.to_vec();
