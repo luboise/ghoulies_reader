@@ -6,7 +6,7 @@ use std::{
 
 use crate::types::{
     AssetName, ChunkLocator,
-    asset::{Asset, AssetDescriptor, AssetError},
+    asset::{Asset, AssetDescriptor, AssetError, BufferView, BufferViewList},
     game::AssetType,
 };
 
@@ -36,9 +36,9 @@ pub struct AssetDescription {
     unk_2: u32,
     chunk_count: u32,
 
-    metadata_ptr: u32,
-    metadata_size: u32,
-    descriptor_list_ptr: u32,
+    descriptor_ptr: u32,
+    descriptor_size: u32,
+    bufferview_list_ptr: u32,
     resource_size: u32, // The total size needed for this asset, including its descriptor list
 }
 
@@ -63,12 +63,20 @@ impl AssetDescription {
         self.unk_1
     }
 
-    fn descriptor_list(&self) -> u32 {
-        self.descriptor_list_ptr
+    pub fn bufferview_list_ptr(&self) -> u32 {
+        self.bufferview_list_ptr
     }
 
-    fn resource_size(&self) -> u32 {
+    pub fn resource_size(&self) -> u32 {
         self.resource_size
+    }
+
+    pub fn descriptor_ptr(&self) -> u32 {
+        self.descriptor_ptr
+    }
+
+    pub fn descriptor_size(&self) -> u32 {
+        self.descriptor_size
     }
 }
 
@@ -84,10 +92,10 @@ impl std::fmt::Debug for AssetDescription {
             .field("unk_1", &self.unk_1)
             .field("unk_2", &self.unk_2)
             .field("chunk_count", &self.chunk_count)
-            .field("metadata_ptr", &self.metadata_ptr)
-            .field("metadata_size", &self.metadata_size)
-            .field("descriptor_list_ptr", &self.descriptor_list_ptr)
-            .field("instantiation_size", &self.resource_size)
+            .field("descriptor_ptr", &self.descriptor_ptr)
+            .field("descriptor_size", &self.descriptor_size)
+            .field("bufferview_list_ptr", &self.bufferview_list_ptr)
+            .field("resource_size", &self.resource_size)
             .finish()
     }
 }
@@ -117,48 +125,15 @@ pub struct BNLFile {
 }
 
 impl BNLFile {
+    pub fn get_bufferview_list(&self, offset: usize) -> Result<BufferViewList, Box<dyn Error>> {
+        Ok(BufferViewList::from_bytes(
+            &self.buffer_views_bytes[offset..],
+        )?)
+    }
+
     pub fn asset_descriptions(&self) -> &[AssetDescription] {
         &self.asset_descriptions
     }
-
-    /*
-    pub fn dump(&self, path: &PathBuf) -> Result<(), Box<dyn Error>> {
-        println!("Dumping BNL file to {}", path.to_str().unwrap());
-        if !path.exists() {
-            println!("Creating output directory {}", path.to_str().unwrap());
-            std::fs::create_dir(path)?;
-        } else if path.is_file() {
-            eprintln!(
-                "Error: Unable to dump BNL file because the output directory, \"{}\" exists as a file.",
-                path.to_str().unwrap()
-            );
-        }
-
-        for asset in &self.asset_descriptions {
-            let asset_folder = path.join(asset.name());
-
-            if !asset_folder.exists() {
-                std::fs::create_dir(&asset_folder)?;
-            }
-
-            for (i, resource) in asset.resources.iter().enumerate() {
-                let file_path = asset_folder.join(format!("resource{}", i));
-                if file_path.exists() && file_path.is_dir() {
-                    eprintln!(
-                        "Error: Path {} already exists but is a directory.",
-                        file_path.to_str().unwrap()
-                    );
-                    panic!();
-                }
-
-                println!("Writing {}", file_path.to_str().unwrap());
-                std::fs::write(file_path, &resource.data.as_slice())?;
-            }
-        }
-
-        Ok(())
-    }
-    */
 
     pub fn get_asset<A: Asset>(&self, name: &str) -> Result<A, AssetError> {
         for asset_desc in &self.asset_descriptions {
@@ -167,14 +142,16 @@ impl BNLFile {
                     return Err(AssetError::AssetTypeMismatch);
                 }
 
-                self.header.asset_desc_loc.offset;
+                let descriptor_ptr: usize = asset_desc.descriptor_ptr() as usize;
+                let desc_slice = &self.descriptor_bytes[descriptor_ptr..];
 
-                let descriptor_list = asset_desc.descriptor_list();
+                let descriptor: A::Descriptor = A::Descriptor::from_bytes(desc_slice)?;
 
-                let bytes = [];
+                let bv = self
+                    .get_bufferview_list(asset_desc.bufferview_list_ptr as usize)
+                    .expect("Unable to get BufferView list.");
 
-                let descriptor: A::Descriptor = A::Descriptor::from_bytes(&bytes)?;
-                let asset = A::from_descriptor(&descriptor)?;
+                let asset = A::new(&descriptor, &bv)?;
 
                 return Ok(asset);
             }
@@ -222,9 +199,9 @@ impl BNLFile {
                 unk_1: read!(cur, u32),
                 unk_2: read!(cur, u32),
                 chunk_count: read!(cur, u32),
-                metadata_ptr: read!(cur, u32),
-                metadata_size: read!(cur, u32),
-                descriptor_list_ptr: read!(cur, u32),
+                descriptor_ptr: read!(cur, u32),
+                descriptor_size: read!(cur, u32),
+                bufferview_list_ptr: read!(cur, u32),
                 resource_size: read!(cur, u32),
             };
 
@@ -249,4 +226,43 @@ impl BNLFile {
 
         Ok(new_bnl)
     }
+
+    /*
+    pub fn dump(&self, path: &PathBuf) -> Result<(), Box<dyn Error>> {
+        println!("Dumping BNL file to {}", path.to_str().unwrap());
+        if !path.exists() {
+            println!("Creating output directory {}", path.to_str().unwrap());
+            std::fs::create_dir(path)?;
+        } else if path.is_file() {
+            eprintln!(
+                "Error: Unable to dump BNL file because the output directory, \"{}\" exists as a file.",
+                path.to_str().unwrap()
+            );
+        }
+
+        for asset in &self.asset_descriptions {
+            let asset_folder = path.join(asset.name());
+
+            if !asset_folder.exists() {
+                std::fs::create_dir(&asset_folder)?;
+            }
+
+            for (i, resource) in asset.resources.iter().enumerate() {
+                let file_path = asset_folder.join(format!("resource{}", i));
+                if file_path.exists() && file_path.is_dir() {
+                    eprintln!(
+                        "Error: Path {} already exists but is a directory.",
+                        file_path.to_str().unwrap()
+                    );
+                    panic!();
+                }
+
+                println!("Writing {}", file_path.to_str().unwrap());
+                std::fs::write(file_path, &resource.data.as_slice())?;
+            }
+        }
+
+        Ok(())
+    }
+    */
 }

@@ -43,13 +43,11 @@ fn main() {
         }
     };
 
-    dbg!(&bnl.asset_descriptions());
-
     let tex = bnl
         .get_asset::<Texture>("aid_texture_ghoulies_gameselect_challenges_bedtimegory")
         .expect("Unable to get texture");
 
-    dbg!(tex);
+    dbg!(&tex);
 
     /*
     let out_path = Path::new("./processed").join(Path::new(&args[1]).file_stem().unwrap());

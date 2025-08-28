@@ -1,5 +1,5 @@
 use crate::types::{
-    asset::{Asset, AssetDescriptor, AssetError, AssetParseError, BufferView},
+    asset::{Asset, AssetDescriptor, AssetError, AssetParseError, BufferView, BufferViewList},
     d3d::{D3DFormat, LinearColour, StandardFormat},
     game::AssetType,
 };
@@ -66,8 +66,8 @@ impl Texture {
 impl Asset for Texture {
     type Descriptor = TextureDescriptor;
 
-    fn from_descriptor(descriptor: &Self::Descriptor) -> Result<Self, AssetParseError> {
-        todo!()
+    fn new(descriptor: &Self::Descriptor, views: &BufferViewList) -> Result<Self, AssetParseError> {
+        todo!("a");
     }
 
     fn descriptor(&self) -> &Self::Descriptor {
