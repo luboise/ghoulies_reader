@@ -1,4 +1,5 @@
 mod constants;
+
 mod types;
 
 pub mod image;
@@ -18,7 +19,7 @@ fn main() {
         return;
     }
 
-    println!("Opening {}", &args[1]);
+    println!("Opening BNL file {}", &args[1]);
 
     let data: Vec<u8> = match std::fs::read(&args[1]) {
         Ok(f) => f,

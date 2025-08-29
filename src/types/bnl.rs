@@ -5,8 +5,8 @@ use std::{
 };
 
 use crate::types::{
-    AssetName, ChunkLocator,
-    asset::{Asset, AssetDescriptor, AssetError, BufferView, BufferViewList},
+    AssetName, DataView,
+    asset::{Asset, AssetDescriptor, AssetError, AssetParseError, DataViewList},
     game::AssetType,
 };
 
@@ -38,7 +38,7 @@ pub struct AssetDescription {
 
     descriptor_ptr: u32,
     descriptor_size: u32,
-    bufferview_list_ptr: u32,
+    dataview_list_ptr: u32,
     resource_size: u32, // The total size needed for this asset, including its descriptor list
 }
 
@@ -64,7 +64,7 @@ impl AssetDescription {
     }
 
     pub fn bufferview_list_ptr(&self) -> u32 {
-        self.bufferview_list_ptr
+        self.dataview_list_ptr
     }
 
     pub fn resource_size(&self) -> u32 {
@@ -94,7 +94,7 @@ impl std::fmt::Debug for AssetDescription {
             .field("chunk_count", &self.chunk_count)
             .field("descriptor_ptr", &self.descriptor_ptr)
             .field("descriptor_size", &self.descriptor_size)
-            .field("bufferview_list_ptr", &self.bufferview_list_ptr)
+            .field("bufferview_list_ptr", &self.dataview_list_ptr)
             .field("resource_size", &self.resource_size)
             .finish()
     }
@@ -106,10 +106,10 @@ struct BNLHeader {
     flags: u8,
     unknown_2: [u8; 5],
 
-    asset_desc_loc: ChunkLocator,
-    buffer_views_loc: ChunkLocator,
-    buffer_loc: ChunkLocator,
-    descriptor_loc: ChunkLocator,
+    asset_desc_loc: DataView,
+    buffer_views_loc: DataView,
+    buffer_loc: DataView,
+    descriptor_loc: DataView,
 }
 
 #[derive(Debug, Default)]
@@ -125,10 +125,9 @@ pub struct BNLFile {
 }
 
 impl BNLFile {
-    pub fn get_bufferview_list(&self, offset: usize) -> Result<BufferViewList, Box<dyn Error>> {
-        Ok(BufferViewList::from_bytes(
+    pub fn get_dataview_list(&self, offset: usize) -> Result<DataViewList, Box<dyn Error>> {
+        Ok(DataViewList::from_bytes(
             &self.buffer_views_bytes[offset..],
-            &self.buffer_bytes,
         )?)
     }
 
@@ -148,11 +147,21 @@ impl BNLFile {
 
                 let descriptor: A::Descriptor = A::Descriptor::from_bytes(desc_slice)?;
 
-                let bv = self
-                    .get_bufferview_list(asset_desc.bufferview_list_ptr as usize)
-                    .expect("Unable to get BufferView list");
+                let slices = self
+                    .get_dataview_list(asset_desc.dataview_list_ptr as usize)
+                    .map_err(|_| {
+                        AssetError::AssetParseError(AssetParseError::InvalidDataViews(
+                            "Unable to get data view list from BNL data.".to_string(),
+                        ))
+                    })?
+                    .slices(&self.buffer_bytes)
+                    .map_err(|_| {
+                        AssetError::AssetParseError(AssetParseError::InvalidDataViews(
+                            "Unable to get data from data slices.".to_string(),
+                        ))
+                    })?;
 
-                let asset = A::new(asset_desc.name(), &descriptor, &bv)?;
+                let asset = A::new(asset_desc.name(), &descriptor, &slices)?;
 
                 return Ok(asset);
             }
@@ -184,13 +193,35 @@ impl BNLFile {
                 }
             };
 
-            let bv = self
-                .get_bufferview_list(asset_desc.bufferview_list_ptr as usize)
-                .expect("Unable to get BufferView list");
+            let dvl = match self.get_dataview_list(asset_desc.dataview_list_ptr as usize) {
+                Ok(d) => d,
+                Err(e) => {
+                    eprintln!(
+                        "Error getting DataViewList for asset {}. Skipping this asset.",
+                        asset_desc.name()
+                    );
+                    continue;
+                }
+            };
 
-            match A::new(asset_desc.name(), &descriptor, &bv) {
+            let slices = match dvl.slices(&self.buffer_bytes) {
+                Ok(s) => s,
+                Err(e) => {
+                    eprintln!(
+                        "Error retrieving data view slices for asset {}. Skipping this asset.",
+                        asset_desc.name()
+                    );
+                    continue;
+                }
+            };
+
+            match A::new(asset_desc.name(), &descriptor, &slices) {
                 Ok(a) => assets.push(a),
-                Err(_) => eprintln!("Failed to load asset \"{}\"", asset_desc.name()),
+                Err(e) => eprintln!(
+                    "Failed to load asset \"{}\"\n    Error: {}",
+                    asset_desc.name(),
+                    e
+                ),
             };
         }
 
@@ -198,8 +229,6 @@ impl BNLFile {
     }
 
     pub fn from_cursor(cur: &mut Cursor<Vec<u8>>) -> Result<BNLFile, Box<dyn Error>> {
-        println!("Reading BNL file.");
-
         let mut header = BNLHeader {
             file_count: read!(cur, u16),
             flags: read!(cur, u8),
@@ -208,10 +237,10 @@ impl BNLFile {
 
         cur.read_exact(&mut header.unknown_2)?;
 
-        header.asset_desc_loc = ChunkLocator::from_cursor(cur)?;
-        header.buffer_views_loc = ChunkLocator::from_cursor(cur)?;
-        header.buffer_loc = ChunkLocator::from_cursor(cur)?;
-        header.descriptor_loc = ChunkLocator::from_cursor(cur)?;
+        header.asset_desc_loc = DataView::from_cursor(cur)?;
+        header.buffer_views_loc = DataView::from_cursor(cur)?;
+        header.buffer_loc = DataView::from_cursor(cur)?;
+        header.descriptor_loc = DataView::from_cursor(cur)?;
 
         let mut new_bnl = BNLFile {
             header,
@@ -219,8 +248,6 @@ impl BNLFile {
         };
 
         assert_eq!(size_of::<AssetDescription>(), 160);
-
-        println!("Beginning asset description reading");
 
         let num_descriptions =
             new_bnl.header.asset_desc_loc.size as usize / size_of::<AssetDescription>();
@@ -238,7 +265,7 @@ impl BNLFile {
                 chunk_count: read!(cur, u32),
                 descriptor_ptr: read!(cur, u32),
                 descriptor_size: read!(cur, u32),
-                bufferview_list_ptr: read!(cur, u32),
+                dataview_list_ptr: read!(cur, u32),
                 resource_size: read!(cur, u32),
             };
 

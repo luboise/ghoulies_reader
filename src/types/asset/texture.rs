@@ -7,8 +7,8 @@ use std::{
 use crate::{
     image,
     types::{
-        asset::{Asset, AssetDescriptor, AssetError, AssetParseError, BufferViewList},
-        d3d::{D3DFormat, LinearColour, StandardFormat, Swizzled},
+        asset::{Asset, AssetDescriptor, AssetError, AssetParseError, DataViewList},
+        d3d::{D3DFormat, LinearColour, PixelBits, StandardFormat, Swizzled},
         game::AssetType,
     },
 };
@@ -31,13 +31,17 @@ impl TextureDescriptor {
     pub fn format(&self) -> D3DFormat {
         self.format
     }
+
+    pub fn required_size(&self) -> usize {
+        (self.width as usize * self.height as usize * self.format.bits_per_pixel()).div_ceil(8)
+    }
 }
 
 #[derive(Debug)]
 pub struct Texture {
     name: String,
     descriptor: TextureDescriptor,
-    views: BufferViewList,
+    data: Vec<u8>,
 }
 
 impl AssetDescriptor for TextureDescriptor {
@@ -92,12 +96,42 @@ impl Asset for Texture {
     fn new(
         name: &str,
         descriptor: &Self::Descriptor,
-        views: &BufferViewList,
+        data_slices: &Vec<&[u8]>,
     ) -> Result<Self, AssetParseError> {
+        if data_slices.len() == 0 {
+            return Err(AssetParseError::InvalidDataViews(
+                "Unable to create a Texture using 0 data views".to_string(),
+            ));
+        } else if data_slices.len() > 1 {
+            println!(
+                "A texture was attempted to created from multiple views. Continuing with the first slice."
+            );
+        }
+
+        let view = data_slices[0];
+
+        let required_size = descriptor.required_size();
+
+        if view.len() < required_size {
+            return Err(AssetParseError::InvalidDataViews(format!(
+                "Required {} bytes for texture ({} available in view)",
+                required_size,
+                view.len()
+            )));
+        } else if view.len() > required_size {
+            /* TODO: Make this not print out, or implement log levels. This message can clog up the
+             * terminal easily.
+            println!(
+                "The data view being used for texture {} is too large. There may be a mismatch between the texture's descriptor and the input data. Continuing with the required amount only.",
+                name
+            );
+            */
+        }
+
         Ok(Texture {
             name: name.to_string(),
             descriptor: descriptor.clone(),
-            views: views.clone(),
+            data: view[..required_size].to_owned(),
         })
     }
 
@@ -107,10 +141,6 @@ impl Asset for Texture {
 
     fn asset_type() -> AssetType {
         AssetType::ResTexture
-    }
-
-    fn buffer_views(&self) -> &BufferViewList {
-        &self.views
     }
 
     fn name(&self) -> &str {
@@ -126,17 +156,19 @@ impl Texture {
             p = p.join(format!("{}.png", self.name()));
         }
 
-        let mut bytes: Vec<u8> = self.views.views[0].data.to_vec();
+        let mut bytes: Vec<u8> = self.data.clone();
 
         let desired_format: D3DFormat = match self.descriptor.format {
             D3DFormat::Linear(LinearColour::R8G8B8A8)
             | D3DFormat::Swizzled(Swizzled::A8B8G8R8)
             | D3DFormat::Swizzled(Swizzled::A8R8G8B8) => D3DFormat::Linear(LinearColour::R8G8B8A8),
             _ => {
+                /*
                 eprintln!(
                     "Unexpected format found during dump: {:?}. Attempting to dump anyway.",
                     self.descriptor.format
                 );
+                */
 
                 D3DFormat::Linear(LinearColour::R8G8B8A8)
             }

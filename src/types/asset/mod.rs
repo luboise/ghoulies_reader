@@ -1,24 +1,24 @@
-use std::fmt;
+use std::{
+    fmt::{self, Display, Write},
+    io,
+};
 
-use crate::types::{ChunkLocator, game::AssetType};
+use crate::types::{DataView, game::AssetType};
 
 pub mod texture;
 
 #[derive(Debug, Clone)]
-pub struct BufferViewList {
+pub struct DataViewList {
     size: u32,
     num_views: u32,
-    views: Vec<BufferView>,
+    views: Vec<DataView>,
 }
 
-impl BufferViewList {
-    pub fn from_bytes(
-        view_bytes: &[u8],
-        resource_bytes: &[u8],
-    ) -> Result<BufferViewList, Box<std::io::Error>> {
+impl DataViewList {
+    pub fn from_bytes(view_bytes: &[u8]) -> Result<DataViewList, Box<io::Error>> {
         if view_bytes.len() < 8 {
-            return Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
+            return Err(Box::new(io::Error::new(
+                io::ErrorKind::InvalidData,
                 "Data not long enough",
             )));
         };
@@ -33,21 +33,19 @@ impl BufferViewList {
             .expect("slice with incorrect length");
         let num_views = u32::from_le_bytes(b);
 
-        if num_views == 0 || size != num_views * size_of::<ChunkLocator>() as u32 + 8 {
-            return Err(Box::new(std::io::Error::other("Invalid size.")));
+        if num_views == 0 || size != num_views * size_of::<DataView>() as u32 + 8 {
+            return Err(Box::new(io::Error::other("Invalid size.")));
         }
 
-        if view_bytes.len() < num_views as usize * size_of::<ChunkLocator>() {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "Input is not large enough.",
-            )
-            .into());
+        if view_bytes.len() < num_views as usize * size_of::<DataView>() {
+            return Err(
+                io::Error::new(io::ErrorKind::InvalidData, "Input is not large enough.").into(),
+            );
         }
 
         let mut views = Vec::with_capacity(num_views as usize);
 
-        let mut chunks = view_bytes[8..].chunks(size_of::<ChunkLocator>());
+        let mut chunks = view_bytes[8..].chunks(size_of::<DataView>());
 
         for _ in 0..num_views {
             let chunk = chunks.next().unwrap();
@@ -55,30 +53,41 @@ impl BufferViewList {
             let view_offset = u32::from_le_bytes(chunk[0..4].try_into().unwrap());
             let view_size = u32::from_le_bytes(chunk[4..8].try_into().unwrap());
 
-            let data = resource_bytes
-                [(view_offset as usize)..(view_offset as usize + view_size as usize)]
-                .to_vec();
-
-            views.push(BufferView {
+            views.push(DataView {
                 offset: view_offset,
                 size: view_size,
-                data,
             });
         }
 
-        Ok(BufferViewList {
+        Ok(DataViewList {
             size,
             num_views,
             views,
         })
     }
-}
 
-#[derive(Debug, Clone)]
-pub struct BufferView {
-    offset: u32,
-    size: u32,
-    data: Vec<u8>,
+    pub fn slices<'a>(&self, data: &'a [u8]) -> Result<Vec<&'a [u8]>, io::Error> {
+        if self.num_views as usize != self.views.len() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "Invalid BufferViewList: num_views {} doesn't match the actual size of the views Vec {}",
+                    self.num_views,
+                    self.views.len()
+                ),
+            ));
+        }
+
+        Ok(self
+            .views
+            .iter()
+            .map(|view| -> &[u8] {
+                let start = view.offset as usize;
+                let end = start + view.size as usize;
+                &data[start..end]
+            })
+            .collect())
+    }
 }
 
 #[derive(Debug)]
@@ -86,6 +95,13 @@ pub enum AssetParseError {
     ParserNotImplemented,
     ErrorParsingDescriptor,
     InputTooSmall,
+    InvalidDataViews(String),
+}
+
+impl Display for AssetParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 #[derive(Debug)]
@@ -124,12 +140,10 @@ pub trait Asset: Sized {
     fn new(
         name: &str,
         descriptor: &Self::Descriptor,
-        views: &BufferViewList,
+        data_slices: &Vec<&[u8]>,
     ) -> Result<Self, AssetParseError>;
 
     fn asset_type() -> AssetType;
-
-    fn buffer_views(&self) -> &BufferViewList;
 
     fn name(&self) -> &str;
 }

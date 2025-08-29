@@ -1,3 +1,9 @@
+type BitCount = usize;
+
+pub trait PixelBits {
+    fn bits_per_pixel(&self) -> BitCount;
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LinearColour {
     A1R5G5B5 = 0x00000010,
@@ -15,6 +21,33 @@ pub enum LinearColour {
     R8G8B8A8 = 0x00000041,
     X1R5G5B5 = 0x0000001C,
     X8R8G8B8 = 0x0000001E,
+}
+
+impl PixelBits for LinearColour {
+    fn bits_per_pixel(&self) -> BitCount {
+        match self {
+            // 8 bits
+            LinearColour::A8 => 8,
+
+            // 16 bits
+            LinearColour::G8B8
+            | LinearColour::R8B8
+            | LinearColour::R5G6B5
+            | LinearColour::R6G5B5
+            | LinearColour::A1R5G5B5
+            | LinearColour::R4G4B4A4
+            | LinearColour::R5G5B5A1
+            | LinearColour::X1R5G5B5
+            | LinearColour::A4R4G4B4 => 16,
+
+            // 32 bits
+            LinearColour::A8B8G8R8
+            | LinearColour::A8R8G8B8
+            | LinearColour::B8G8R8A8
+            | LinearColour::R8G8B8A8
+            | LinearColour::X8R8G8B8 => 32,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -36,6 +69,31 @@ enum LinearLuminance {
     F16 = 0x00000031,
 }
 
+impl PixelBits for LinearLuminance {
+    fn bits_per_pixel(&self) -> BitCount {
+        match self {
+            // 8 bits
+            LinearLuminance::L8 => 8,
+
+            // 16 bits
+            LinearLuminance::A8L8
+            | LinearLuminance::AL8
+            | LinearLuminance::L16
+            | LinearLuminance::V8U8
+            | LinearLuminance::D16
+            | LinearLuminance::F16
+            | LinearLuminance::L6V5U5 => 16,
+
+            // 32 bits
+            LinearLuminance::V16U16
+            | LinearLuminance::X8L8V8U8
+            | LinearLuminance::Q8W8V8U8
+            | LinearLuminance::D24S8
+            | LinearLuminance::F24S8 => 32,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Swizzled {
     /* Swizzled formats */
@@ -54,6 +112,33 @@ pub enum Swizzled {
     R8G8B8A8 = 0x0000003C,
     R8B8 = 0x00000029,
     G8B8 = 0x00000028,
+}
+
+impl PixelBits for Swizzled {
+    fn bits_per_pixel(&self) -> BitCount {
+        match self {
+            // 8 bits
+            Swizzled::A8 => 8,
+
+            // 16 bits
+            Swizzled::R5G6B5
+            | Swizzled::R6G5B5
+            | Swizzled::X1R5G5B5
+            | Swizzled::A1R5G5B5
+            | Swizzled::A4R4G4B4
+            | Swizzled::R4G4B4A4
+            | Swizzled::R5G5B5A1
+            | Swizzled::R8B8
+            | Swizzled::G8B8 => 16,
+
+            // 32 bits
+            Swizzled::A8R8G8B8
+            | Swizzled::X8R8G8B8
+            | Swizzled::A8B8G8R8
+            | Swizzled::B8G8R8A8
+            | Swizzled::R8G8B8A8 => 32,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -88,6 +173,41 @@ pub enum StandardFormat {
     DXT4Or5 = 0x0000000F,
 }
 
+impl PixelBits for StandardFormat {
+    fn bits_per_pixel(&self) -> BitCount {
+        match self {
+            StandardFormat::Unknown => 0,
+
+            // 4 bits
+            StandardFormat::DXT1 => 4,
+
+            // 8 bits
+            StandardFormat::P8
+            | StandardFormat::L8
+            | StandardFormat::A8L8
+            | StandardFormat::AL8
+            | StandardFormat::DXT2Or3
+            | StandardFormat::DXT4Or5 => 8,
+
+            // 16 bits
+            StandardFormat::L16
+            | StandardFormat::V8U8
+            | StandardFormat::L6V5U5
+            | StandardFormat::D16
+            | StandardFormat::F16
+            | StandardFormat::YUY2
+            | StandardFormat::UYVY => 16,
+
+            // 32 bits
+            StandardFormat::X8L8V8U8
+            | StandardFormat::Q8W8V8U8
+            | StandardFormat::V16U16
+            | StandardFormat::D24S8
+            | StandardFormat::F24S8 => 32,
+        }
+    }
+}
+
 #[repr(u32)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum D3DFormat {
@@ -99,4 +219,18 @@ pub enum D3DFormat {
     VertexData = 100,
     Index16 = 101,
     ForceDWORD = 0x7fffffff,
+}
+
+impl PixelBits for D3DFormat {
+    fn bits_per_pixel(&self) -> BitCount {
+        match self {
+            D3DFormat::Swizzled(format) => format.bits_per_pixel(),
+            D3DFormat::Linear(format) => format.bits_per_pixel(),
+            D3DFormat::Standard(format) => format.bits_per_pixel(),
+            D3DFormat::Luminance(format) => format.bits_per_pixel(),
+            D3DFormat::Index16 => 16, // 16 bits per index
+            D3DFormat::VertexData => 0,
+            D3DFormat::ForceDWORD => 0,
+        }
+    }
 }
