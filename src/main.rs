@@ -4,7 +4,13 @@ mod types;
 
 pub mod image_data;
 
-use std::{env, io::Cursor, path::Path};
+use std::{
+    env,
+    ffi::OsStr,
+    fs,
+    io::Cursor,
+    path::{Path, PathBuf},
+};
 
 use crate::types::{
     BNLFile,
@@ -19,12 +25,14 @@ fn main() {
         return;
     }
 
-    println!("Opening BNL file {}", &args[1]);
+    let bnl_path = PathBuf::from(&args[1]);
 
-    let data: Vec<u8> = match std::fs::read(&args[1]) {
+    println!("Opening BNL file {}", bnl_path.display());
+
+    let data: Vec<u8> = match std::fs::read(&bnl_path) {
         Ok(f) => f,
         Err(e) => {
-            println!("Unable to open file {}. Error: {}", &args[1], e);
+            println!("Unable to open file {}. Error: {}", bnl_path.display(), e);
             return;
         }
     };
@@ -49,11 +57,66 @@ fn main() {
         }
     };
 
-    let textures = bnl.get_assets::<Texture>();
-    textures.iter().for_each(|t| {
-        t.dump(Path::new("./out")).unwrap_or_else(|e| {
-            eprintln!("Failed to dump \"{}\"\n    Error: {}", t.name(), e);
-        });
+    let raw_assets = bnl.get_raw_assets();
+
+    let out_filename = format!(
+        "{}_bnl",
+        bnl_path
+            .file_stem()
+            .unwrap_or(OsStr::new("unknown"))
+            .display()
+    );
+
+    // ./out/common_bnl
+    let bnl_out_path = Path::new("./out").join(out_filename);
+
+    raw_assets.iter().for_each(|raw_asset| {
+        // ./out/common_bnl/aid_texture_xyz
+        let asset_path: PathBuf = bnl_out_path.join(&raw_asset.name);
+
+        if asset_path.is_file() {
+            eprintln!(
+                "Unable to write to {} (A file already exists by that name)",
+                asset_path.display()
+            );
+            return;
+        } else if !asset_path.exists() {
+            match fs::create_dir_all(&asset_path) {
+                Ok(_) => (),
+                Err(e) => {
+                    eprintln!(
+                        "Unable to create directory {}.\nError: {}",
+                        asset_path.display(),
+                        e
+                    );
+                    return;
+                }
+            }
+        }
+
+        std::fs::write(asset_path.join("descriptor"), &raw_asset.descriptor_bytes).unwrap_or_else(
+            |e| {
+                eprintln!(
+                    "Unable to write descriptor for {}\nError: {}",
+                    &raw_asset.name, e
+                );
+            },
+        );
+
+        raw_asset
+            .data_slices
+            .iter()
+            .enumerate()
+            .for_each(|(i, slice)| {
+                std::fs::write(asset_path.join(format!("resource{}", i)), slice).unwrap_or_else(
+                    |e| {
+                        eprintln!(
+                            "Unable to write descriptor for {}\nError: {}",
+                            &raw_asset.name, e
+                        );
+                    },
+                );
+            });
     });
 }
 

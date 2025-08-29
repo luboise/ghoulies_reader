@@ -6,7 +6,7 @@ use std::{
 
 use crate::types::{
     AssetName, DataView,
-    asset::{Asset, AssetDescriptor, AssetError, AssetParseError, DataViewList},
+    asset::{Asset, AssetDescriptor, AssetError, AssetParseError, DataViewList, RawAsset},
     game::AssetType,
 };
 
@@ -223,6 +223,105 @@ impl BNLFile {
                     e
                 ),
             };
+        }
+
+        assets
+    }
+
+    pub fn get_raw_asset(&self, name: &str) -> Result<RawAsset, AssetError> {
+        for asset_desc in &self.asset_descriptions {
+            if asset_desc.name() == name {
+                let desc_ptr: usize = asset_desc.descriptor_ptr() as usize;
+                let desc_size: usize = asset_desc.descriptor_size as usize;
+
+                let desc_bytes: Vec<u8> =
+                    self.descriptor_bytes[desc_ptr..desc_ptr + desc_size].to_vec();
+
+                /*
+                    .map_err(|e| {
+                        AssetError::AssetParseError(AssetParseError::InvalidDataViews(
+                            "bruh".to_string(),
+                        ))
+                    })?;
+                */
+
+                let dvl = self
+                    .get_dataview_list(asset_desc.dataview_list_ptr as usize)
+                    .map_err(|_| {
+                        AssetError::AssetParseError(AssetParseError::InvalidDataViews(
+                            "Unable to get data view list from BNL data.".to_string(),
+                        ))
+                    })?;
+
+                let slices = dvl.slices(&self.buffer_bytes).map_err(|_| {
+                    AssetError::AssetParseError(AssetParseError::InvalidDataViews(
+                        "Unable to get data from data slices.".to_string(),
+                    ))
+                })?;
+
+                return Ok(RawAsset {
+                    name: asset_desc.name().to_string(),
+                    descriptor_bytes: desc_bytes,
+                    data_slices: slices.iter().map(|s| s.to_vec()).collect(),
+                });
+            }
+        }
+
+        Err(AssetError::AssetNameNotFound)
+    }
+
+    pub fn get_raw_assets(&self) -> Vec<RawAsset> {
+        let mut assets = Vec::new();
+
+        let clo = |asset_desc: &AssetDescription| -> Result<RawAsset, AssetError> {
+            let desc_ptr: usize = asset_desc.descriptor_ptr() as usize;
+            let desc_size: usize = asset_desc.descriptor_size as usize;
+
+            let desc_bytes: Vec<u8> =
+                self.descriptor_bytes[desc_ptr..desc_ptr + desc_size].to_vec();
+
+            /*
+                .map_err(|e| {
+                    AssetError::AssetParseError(AssetParseError::InvalidDataViews(
+                        "bruh".to_string(),
+                    ))
+                })?;
+            */
+
+            let dvl = self
+                .get_dataview_list(asset_desc.dataview_list_ptr as usize)
+                .map_err(|_| {
+                    AssetError::AssetParseError(AssetParseError::InvalidDataViews(
+                        "Unable to get data view list from BNL data.".to_string(),
+                    ))
+                })?;
+
+            let slices = dvl.slices(&self.buffer_bytes).map_err(|_| {
+                AssetError::AssetParseError(AssetParseError::InvalidDataViews(
+                    "Unable to get data from data slices.".to_string(),
+                ))
+            })?;
+
+            Ok(RawAsset {
+                name: asset_desc.name().to_string(),
+                descriptor_bytes: desc_bytes,
+                data_slices: slices.iter().map(|s| s.to_vec()).collect(),
+            })
+        };
+
+        for asset_desc in &self.asset_descriptions {
+            match clo(asset_desc) {
+                Ok(asset) => {
+                    assets.push(asset);
+                }
+                Err(e) => {
+                    eprintln!(
+                        "Error retrieving RawAsset for {}.\nError: {}",
+                        asset_desc.name(),
+                        e
+                    );
+                }
+            }
         }
 
         assets

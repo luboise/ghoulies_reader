@@ -14,7 +14,7 @@ pub fn transcode(
     match src_format {
         D3DFormat::Standard(StandardFormat::DXT1) => match dst_format {
             D3DFormat::Linear(LinearColour::R8G8B8A8) => {
-                let mut buf = bcndecode::decode(
+                let buf = bcndecode::decode(
                     bytes,
                     width,
                     height,
@@ -32,7 +32,7 @@ pub fn transcode(
 
         D3DFormat::Standard(StandardFormat::DXT2Or3) => match dst_format {
             D3DFormat::Linear(LinearColour::R8G8B8A8) => {
-                let mut buf = bcndecode::decode(
+                let buf = bcndecode::decode(
                     bytes,
                     width,
                     height,

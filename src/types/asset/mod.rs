@@ -8,6 +8,13 @@ use crate::types::{DataView, game::AssetType};
 pub mod texture;
 
 #[derive(Debug, Clone)]
+pub struct RawAsset {
+    pub name: String,
+    pub descriptor_bytes: Vec<u8>,
+    pub data_slices: Vec<Vec<u8>>,
+}
+
+#[derive(Debug, Clone)]
 pub struct DataViewList {
     size: u32,
     num_views: u32,
