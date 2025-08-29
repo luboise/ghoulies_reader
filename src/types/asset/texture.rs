@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    image,
+    image_data,
     types::{
         asset::{Asset, AssetDescriptor, AssetError, AssetParseError, DataViewList},
         d3d::{D3DFormat, LinearColour, PixelBits, StandardFormat, Swizzled},
@@ -175,7 +175,7 @@ impl Texture {
         };
 
         if desired_format != self.descriptor.format {
-            bytes = image::transcode(
+            bytes = image_data::transcode(
                 self.descriptor.width.into(),
                 self.descriptor.height.into(),
                 self.descriptor.format,

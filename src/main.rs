@@ -2,7 +2,7 @@ mod constants;
 
 mod types;
 
-pub mod image;
+pub mod image_data;
 
 use std::{env, io::Cursor, path::Path};
 
