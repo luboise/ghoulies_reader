@@ -246,9 +246,6 @@ impl BNLFile {
 
     /// Returns all assets of a given type from this [`BNLFile`].
     ///
-    /// This method can not error, and will only return assets which do not have any errors during
-    /// parsing.
-    ///
     /// # Examples
     ///
     /// ```
@@ -321,18 +318,23 @@ impl BNLFile {
     /// Retrieves a [`RawAsset`] by name.
     ///
     /// # Errors
-    /// - [`AssetError`] when the asset can not be parsed from the [`BNLFile`].
+    /// Returns an [`AssetError`] if the asset can not be parsed from the [`BNLFile`].
     ///
-    ///
+    /// # Examples
     /// ```
     /// use bnl::BNLFile;
     /// use bnl::asset::Texture;
     ///
     /// let bnl_file = BNLFile::from_bytes(...);
-    /// let raw_texture = bnl_file.get_raw_asset().expect("Unable to extract.");
+    /// let raw_asset = bnl_file.get_raw_asset().expect("Unable to extract.");
     ///
-    /// raw_texture.
-    /// // Dump all of the textures here
+    /// // Dump the data from the RawAsset
+    /// std::fs::write("./descriptor", &raw_asset.descriptor_bytes).expect("Unable to write
+    /// descriptor.");
+    /// raw_asset.data_slices.iter().enumerate().for_each(|(i, slice)| {
+    ///     std::fs::write(format!("./resource{}", i), &slice).expect("Unable to write resource.");
+    /// });
+    /// ```
     pub fn get_raw_asset(&self, name: &str) -> Result<RawAsset, AssetError> {
         for asset_desc in &self.asset_descriptions {
             if asset_desc.name() == name {
@@ -375,6 +377,28 @@ impl BNLFile {
         Err(AssetError::NotFound)
     }
 
+    /// Retrieves all [`RawAsset`] entries.
+    ///
+    /// # Examples
+    /// ```
+    /// use bnl::BNLFile;
+    /// use bnl::asset::Texture;
+    ///
+    /// let bnl_file = BNLFile::from_bytes(...);
+    /// let raw_assets = bnl_file.get_raw_assets().expect("Unable to extract.");
+    ///
+    /// // Dump the data from the RawAsset
+    ///
+    /// for raw_asset in raw_assets {
+    ///     std::fs::write("./descriptor", &raw_asset.descriptor_bytes)
+    ///                         .expect("Unable to write descriptor.");
+    ///
+    ///     raw_asset.data_slices.iter().enumerate().for_each(|(i, slice)| {
+    ///         std::fs::write(format!("./resource{}", i), &slice)
+    ///                         .expect("Unable to write resource.");;
+    ///     });
+    /// }
+    /// ```
     pub fn get_raw_assets(&self) -> Vec<RawAsset> {
         let mut assets = Vec::new();
 
