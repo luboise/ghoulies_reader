@@ -131,15 +131,18 @@ impl BNLFile {
             ..Default::default()
         };
 
-        let decompressed_bytes = miniz_oxide::inflate::decompress_to_vec_zlib(&bytes[40..])?;
-        bytes.extend_from_slice(&decompressed_bytes);
-
         cur.read_exact(&mut header.unknown_2)?;
 
         header.asset_desc_loc = DataView::from_cursor(&mut cur)?;
         header.buffer_views_loc = DataView::from_cursor(&mut cur)?;
         header.buffer_loc = DataView::from_cursor(&mut cur)?;
         header.descriptor_loc = DataView::from_cursor(&mut cur)?;
+
+        let decompressed_bytes = miniz_oxide::inflate::decompress_to_vec_zlib(&bnl_bytes[40..])?;
+        bytes.extend_from_slice(&decompressed_bytes);
+
+        // Need to to this so that bytes.extent_from_slice doesn't cause an immutable borrow error
+        cur = Cursor::new(&bytes);
 
         let mut new_bnl = BNLFile {
             header,
@@ -150,6 +153,8 @@ impl BNLFile {
 
         let num_descriptions =
             new_bnl.header.asset_desc_loc.size as usize / size_of::<AssetDescription>();
+
+        cur.seek(SeekFrom::Start(new_bnl.header.asset_desc_loc.offset as u64))?;
 
         for _ in 0..num_descriptions {
             let mut asset_name: AssetName = [0x00; 128];
