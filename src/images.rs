@@ -1,4 +1,4 @@
-use crate::types::d3d::{D3DFormat, LinearColour, StandardFormat, Swizzled};
+use crate::d3d::{D3DFormat, LinearColour, StandardFormat, Swizzled};
 
 pub fn transcode(
     width: usize,

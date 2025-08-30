@@ -5,12 +5,10 @@ use std::{
 };
 
 use crate::{
-    image_data,
-    types::{
-        asset::{Asset, AssetDescriptor, AssetError, AssetParseError, DataViewList},
-        d3d::{D3DFormat, LinearColour, PixelBits, StandardFormat, Swizzled},
-        game::AssetType,
-    },
+    asset::{Asset, AssetDescriptor, AssetError, AssetParseError},
+    d3d::{D3DFormat, LinearColour, PixelBits, StandardFormat, Swizzled},
+    game::AssetType,
+    images,
 };
 
 #[derive(Debug, Clone)]
@@ -47,7 +45,7 @@ pub struct Texture {
 impl AssetDescriptor for TextureDescriptor {
     fn from_bytes(data: &[u8]) -> Result<Self, AssetError> {
         if data.len() < size_of::<TextureDescriptor>() {
-            return Err(AssetError::AssetParseError(AssetParseError::InputTooSmall));
+            return Err(AssetError::ParseError(AssetParseError::InputTooSmall));
         }
 
         let format = match u32::from_le_bytes(data[0..4].try_into().unwrap()) {
@@ -96,9 +94,9 @@ impl Asset for Texture {
     fn new(
         name: &str,
         descriptor: &Self::Descriptor,
-        data_slices: &Vec<&[u8]>,
+        data_slices: &[&[u8]],
     ) -> Result<Self, AssetParseError> {
-        if data_slices.len() == 0 {
+        if data_slices.is_empty() {
             return Err(AssetParseError::InvalidDataViews(
                 "Unable to create a Texture using 0 data views".to_string(),
             ));
@@ -175,7 +173,7 @@ impl Texture {
         };
 
         if desired_format != self.descriptor.format {
-            bytes = image_data::transcode(
+            bytes = images::transcode(
                 self.descriptor.width.into(),
                 self.descriptor.height.into(),
                 self.descriptor.format,

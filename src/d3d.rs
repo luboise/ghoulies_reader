@@ -51,7 +51,7 @@ impl PixelBits for LinearColour {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-enum LinearLuminance {
+pub enum LinearLuminance {
     A8L8 = 0x00000020,
     AL8 = 0x0000001B,
     L16 = 0x00000035,
@@ -141,6 +141,7 @@ impl PixelBits for Swizzled {
     }
 }
 
+// TODO: Fix portability issue with enum
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum StandardFormat {
     Unknown = 0xFFFFFFFF,
