@@ -5,11 +5,13 @@ use std::{
 };
 
 use crate::{
-    asset::{Asset, AssetDescriptor, AssetError, AssetParseError},
+    asset::{Asset, AssetDescriptor, AssetParseError},
     d3d::{D3DFormat, LinearColour, PixelBits, StandardFormat, Swizzled},
     game::AssetType,
     images,
 };
+
+const TEXTURE_DESCRIPTOR_SIZE: usize = 28;
 
 #[derive(Debug, Clone)]
 pub struct TextureDescriptor {
@@ -64,7 +66,7 @@ pub struct Texture {
 
 impl AssetDescriptor for TextureDescriptor {
     fn from_bytes(data: &[u8]) -> Result<Self, AssetParseError> {
-        if data.len() < size_of::<TextureDescriptor>() {
+        if data.len() < TEXTURE_DESCRIPTOR_SIZE {
             return Err(AssetParseError::InputTooSmall);
         }
 
@@ -121,15 +123,19 @@ impl Asset for Texture {
 
         let view = data_slices[0];
 
-        let required_size = descriptor.required_size();
+        let offset = descriptor.texture_offset as usize;
 
-        if view.len() < required_size {
+        let size = descriptor.texture_size as usize;
+
+        let end = (size + offset) as usize;
+
+        if view.len() < end {
             return Err(AssetParseError::InvalidDataViews(format!(
                 "Required {} bytes for texture ({} available in view)",
-                required_size,
+                size,
                 view.len()
             )));
-        } else if view.len() > required_size {
+        } else if view.len() > end {
             /* TODO: Make this not print out, or implement log levels. This message can clog up the
              * terminal easily.
             println!(
@@ -139,10 +145,16 @@ impl Asset for Texture {
             */
         }
 
+        let mut data_vec = view[offset..end].to_owned();
+
+        if data_vec.len() < size {
+            data_vec.resize(size, 0xFF);
+        }
+
         Ok(Texture {
             name: name.to_string(),
             descriptor: descriptor.clone(),
-            data: view[..required_size].to_owned(),
+            data: data_vec,
         })
     }
 
@@ -230,5 +242,61 @@ impl Texture {
         writer.finish().expect("Unable to close writer");
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /*
+    #[test]
+    fn texture_descriptor_size() {
+        assert_eq!(size_of::<TextureDescriptor>(), 28);
+    }
+    */
+
+    #[test]
+    fn from_bytes_non_zero_offset() {
+        let data: [u8; 0x1C] = [
+            0x0C, 0x00, 0x00, 0x00, // DXT1
+            0x1C, 0x00, 0x00, 0x00, // Header size
+            0x80, 0x00, // 0x80 wide
+            0x80, 0x00, // 0x80 high
+            0x00, 0x00, 0x00, 0x08, // Flags
+            0x00, 0x01, 0x00, 0x00, // Unknown
+            0x00, 0x52, 0x01, 0x00, // Offset
+            0x00, 0x2B, 0x00, 0x00, // Size
+        ];
+
+        let tex_desc = TextureDescriptor::from_bytes(&data).unwrap();
+        assert_eq!(tex_desc.format, D3DFormat::Standard(StandardFormat::DXT1));
+        assert_eq!(tex_desc.header_size, 0x1c);
+        assert_eq!(tex_desc.width, 0x80);
+        assert_eq!(tex_desc.height, 0x80);
+        assert_eq!(tex_desc.texture_offset, 0x15200);
+        assert_eq!(tex_desc.texture_size, 0x2b00);
+    }
+
+    #[test]
+    fn from_bytes_zero_offset() {
+        let data: [u8; 0x1C] = [
+            0x0C, 0x00, 0x00, 0x00, // DXT1
+            0x1C, 0x00, 0x00, 0x00, // Header size
+            0x80, 0x00, // 0x80 wide
+            0x80, 0x00, // 0x80 high
+            0x00, 0x00, 0x00, 0x08, // Flags
+            0x00, 0x01, 0x00, 0x00, // Unknown
+            0x00, 0x00, 0x00, 0x00, // Offset
+            0x00, 0x2B, 0x00, 0x00, // Size
+        ];
+
+        let tex_desc = TextureDescriptor::from_bytes(&data).unwrap();
+        assert_eq!(tex_desc.format, D3DFormat::Standard(StandardFormat::DXT1));
+        assert_eq!(tex_desc.header_size, 0x1c);
+        assert_eq!(tex_desc.width, 0x80);
+        assert_eq!(tex_desc.height, 0x80);
+        assert_eq!(tex_desc.texture_offset, 0);
+        assert_eq!(tex_desc.texture_size, 0x2b00);
     }
 }
