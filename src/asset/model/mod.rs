@@ -1,5 +1,4 @@
 pub mod sub_main;
-pub mod subresources;
 
 use std::io::{Cursor, Seek, SeekFrom};
 
@@ -10,7 +9,7 @@ use num_enum::{IntoPrimitive, TryFromPrimitive};
 use crate::{
     asset::{
         Asset, AssetDescriptor, AssetError, AssetParseError,
-        model::{sub_main::ModelMainSubres, subresources::SubTextureDescriptor},
+        model::sub_main::ModelMainSubres,
         texture::{Texture, TextureDescriptor},
     },
     game::AssetType,
@@ -62,7 +61,7 @@ pub struct ModelDescriptor {
     subresources_offset: u32,
     subresource_count: u32,
     raw_subresources: Vec<RawModelSubresource>,
-    subtexture_descriptors: Vec<SubTextureDescriptor>,
+    texture_descriptors: Vec<TextureDescriptor>,
 }
 
 impl AssetDescriptor for ModelDescriptor {
@@ -92,7 +91,7 @@ impl AssetDescriptor for ModelDescriptor {
 
         let mut raw_subresources = vec![];
 
-        let mut subtexture_descriptors = vec![];
+        let mut texture_descriptors = vec![];
 
         for _ in 0..subresource_count {
             let subres_type: ModelSubresType = cur
@@ -127,10 +126,9 @@ impl AssetDescriptor for ModelDescriptor {
                         let ptr = tex_cur.read_u32::<LittleEndian>()? as usize;
 
                         let slice = &data[ptr..];
+                        let tex_desc = TextureDescriptor::from_bytes(slice)?;
 
-                        let tex_desc = SubTextureDescriptor::from_bytes(slice)?;
-
-                        subtexture_descriptors.push(tex_desc);
+                        texture_descriptors.push(tex_desc);
                     }
                 }
                 _ => {}
@@ -141,7 +139,7 @@ impl AssetDescriptor for ModelDescriptor {
             subresources_offset,
             subresource_count,
             raw_subresources,
-            subtexture_descriptors,
+            texture_descriptors,
         })
     }
 }
@@ -166,7 +164,7 @@ impl Asset for Model {
             textures: vec![],
         };
 
-        for subtex_desc in &model.descriptor.subtexture_descriptors {
+        for subtex_desc in &model.descriptor.texture_descriptors {
             let desc: TextureDescriptor = subtex_desc.clone().into();
 
             // Safe to pass data_slices here because models always use resource0 for the tex slot

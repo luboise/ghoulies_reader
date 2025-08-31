@@ -19,8 +19,6 @@ pub struct TextureDescriptor {
     height: u16,
     flags: u32, // 0x00000001
     unknown_3a: u32,
-    tile_count: u32,
-    unknown_3c: u32,
     texture_offset: u32,
     texture_size: u32,
 }
@@ -33,8 +31,6 @@ impl TextureDescriptor {
         height: u16,
         flags: u32,
         unknown_3a: u32,
-        tile_count: u32,
-        unknown_3c: u32,
         texture_offset: u32,
         texture_size: u32,
     ) -> Self {
@@ -45,8 +41,6 @@ impl TextureDescriptor {
             height,
             flags,
             unknown_3a,
-            tile_count,
-            unknown_3c,
             texture_offset,
             texture_size,
         }
@@ -89,15 +83,14 @@ impl AssetDescriptor for TextureDescriptor {
                 D3DFormat::Linear(LinearColour::A8R8G8B8)
             }
         };
+
         let header_size = u32::from_le_bytes(data[4..8].try_into().unwrap());
         let width = u16::from_le_bytes(data[8..10].try_into().unwrap());
         let height = u16::from_le_bytes(data[10..12].try_into().unwrap());
         let flags = u32::from_le_bytes(data[12..16].try_into().unwrap());
         let unknown_3a = u32::from_le_bytes(data[16..20].try_into().unwrap());
-        let tile_count = u32::from_le_bytes(data[20..24].try_into().unwrap());
-        let unknown_3c = u32::from_le_bytes(data[24..28].try_into().unwrap());
-        let texture_offset = u32::from_le_bytes(data[28..32].try_into().unwrap());
-        let texture_size = u32::from_le_bytes(data[32..36].try_into().unwrap());
+        let texture_offset = u32::from_le_bytes(data[20..24].try_into().unwrap());
+        let texture_size = u32::from_le_bytes(data[24..28].try_into().unwrap());
 
         Ok(TextureDescriptor {
             format,
@@ -106,8 +99,6 @@ impl AssetDescriptor for TextureDescriptor {
             height,
             flags,
             unknown_3a,
-            tile_count,
-            unknown_3c,
             texture_offset,
             texture_size,
         })
