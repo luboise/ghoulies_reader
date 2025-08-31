@@ -8,6 +8,7 @@ use byteorder::{LittleEndian, ReadBytesExt};
 
 use std::{
     error::Error,
+    fmt::Display,
     io::{Cursor, Read, Seek, SeekFrom},
 };
 
@@ -226,21 +227,23 @@ impl BNLFile {
 
                 let descriptor: A::Descriptor = A::Descriptor::from_bytes(desc_slice)?;
 
-                let slices = self
+                let dvl = self
                     .get_dataview_list(asset_desc.dataview_list_ptr as usize)
                     .map_err(|_| {
                         AssetError::ParseError(AssetParseError::InvalidDataViews(
                             "Unable to get data view list from BNL data.".to_string(),
                         ))
-                    })?
-                    .slices(&self.buffer_bytes)
-                    .map_err(|_| {
-                        AssetError::ParseError(AssetParseError::InvalidDataViews(
-                            "Unable to get data from data slices.".to_string(),
-                        ))
                     })?;
 
-                let asset = A::new(asset_desc.name(), &descriptor, &slices)?;
+                let virtual_res =
+                    VirtualResource::from_dvl(&dvl, &self.buffer_bytes).map_err(|e| {
+                        AssetError::ParseError(AssetParseError::InvalidDataViews(format!(
+                            "Unable to get data from data slices.\nError: {}",
+                            e
+                        )))
+                    })?;
+
+                let asset = A::new(asset_desc.name(), &descriptor, &virtual_res)?;
 
                 return Ok(asset);
             }
@@ -286,28 +289,20 @@ impl BNLFile {
             };
 
             let dvl = match self.get_dataview_list(asset_desc.dataview_list_ptr as usize) {
-                Ok(d) => d,
-                Err(e) => {
-                    eprintln!(
-                        "Error getting DataViewList for asset {}. Skipping this asset.",
-                        asset_desc.name()
-                    );
+                Ok(dvl) => dvl,
+                Err(_) => {
                     continue;
                 }
             };
 
-            let slices = match dvl.slices(&self.buffer_bytes) {
-                Ok(s) => s,
-                Err(e) => {
-                    eprintln!(
-                        "Error retrieving data view slices for asset {}. Skipping this asset.",
-                        asset_desc.name()
-                    );
+            let virtual_res = match VirtualResource::from_dvl(&dvl, &self.buffer_bytes) {
+                Ok(res) => res,
+                Err(_) => {
                     continue;
                 }
             };
 
-            match A::new(asset_desc.name(), &descriptor, &slices) {
+            match A::new(asset_desc.name(), &descriptor, &virtual_res) {
                 Ok(a) => assets.push(a),
                 Err(e) => eprintln!(
                     "Failed to load asset \"{}\"\n    Error: {}",
@@ -462,5 +457,90 @@ impl BNLFile {
         Ok(DataViewList::from_bytes(
             &self.buffer_views_bytes[offset..],
         )?)
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct VirtualResource<'a> {
+    slices: Vec<&'a [u8]>,
+}
+
+#[derive(Debug)]
+enum VirtualResourceError {
+    OffsetOutOfBounds,
+    SizeOutOfBounds,
+}
+
+impl Display for VirtualResourceError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl VirtualResource<'_> {
+    pub fn from_dvl<'a>(
+        dataview_list: &DataViewList,
+        bytes: &'a [u8],
+    ) -> Result<VirtualResource<'a>, VirtualResourceError> {
+        let views = dataview_list.views();
+
+        let mut slices = Vec::new();
+
+        for view in views {
+            let offset = view.offset as usize;
+            let size = view.size as usize;
+
+            if offset > bytes.len() {
+                return Err(VirtualResourceError::OffsetOutOfBounds);
+            } else if bytes.len() - offset < size {
+                return Err(VirtualResourceError::SizeOutOfBounds);
+            }
+
+            slices.push(&bytes[offset..offset + size]);
+        }
+
+        Ok(VirtualResource { slices })
+    }
+
+    pub fn get_bytes(
+        &self,
+        offset_n: usize,
+        size_n: usize,
+    ) -> Result<Vec<u8>, VirtualResourceError>
+where {
+        let offset = offset_n.into();
+        let size = size_n.into();
+
+        let end = self.len();
+
+        if end < offset {
+            return Err(VirtualResourceError::OffsetOutOfBounds);
+        } else if end - offset < size {
+            return Err(VirtualResourceError::SizeOutOfBounds);
+        }
+
+        /*
+        views.iter().fold(0usize, |offset, view| {
+            let view_offset = view.offset as usize;
+            let copy_size = view.size as usize;
+
+            bytes[offset..offset + copy_size]
+                .copy_from_slice(&data[view_offset..view_offset + copy_size]);
+
+            offset + new_offset as usize
+        });
+        */
+
+        todo!();
+    }
+
+    pub fn len(&self) -> usize {
+        self.slices
+            .iter()
+            .fold(0, |acc, slice: &&[u8]| -> usize { acc + (*slice).len() })
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 }

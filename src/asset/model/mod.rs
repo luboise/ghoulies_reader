@@ -7,9 +7,9 @@ use byteorder::{LittleEndian, ReadBytesExt};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
 use crate::{
+    VirtualResource,
     asset::{
-        Asset, AssetDescriptor, AssetError, AssetParseError,
-        model::sub_main::ModelMainSubres,
+        Asset, AssetDescriptor, AssetParseError,
         texture::{Texture, TextureDescriptor},
     },
     game::AssetType,
@@ -150,9 +150,9 @@ impl Asset for Model {
     fn new(
         name: &str,
         descriptor: &Self::Descriptor,
-        data_slices: &[&[u8]],
+        virtual_res: &VirtualResource,
     ) -> Result<Self, AssetParseError> {
-        if data_slices.is_empty() {
+        if virtual_res.is_empty() {
             return Err(AssetParseError::InvalidDataViews(
                 "Unable to create a Model using 0 data views".to_string(),
             ));
@@ -169,7 +169,7 @@ impl Asset for Model {
 
             // Safe to pass data_slices here because models always use resource0 for the tex slot
             // on the main model
-            model.textures.push(Texture::new("", &desc, data_slices)?);
+            model.textures.push(Texture::new("", &desc, virtual_res)?);
         }
 
         Ok(model)

@@ -5,6 +5,7 @@ use std::{
 };
 
 use crate::{
+    VirtualResource, VirtualResourceError,
     asset::{Asset, AssetDescriptor, AssetParseError},
     d3d::{D3DFormat, LinearColour, PixelBits, StandardFormat, Swizzled},
     game::AssetType,
@@ -113,48 +114,44 @@ impl Asset for Texture {
     fn new(
         name: &str,
         descriptor: &Self::Descriptor,
-        data_slices: &[&[u8]],
+        virtual_res: &VirtualResource,
     ) -> Result<Self, AssetParseError> {
-        if data_slices.is_empty() {
+        if virtual_res.is_empty() {
             return Err(AssetParseError::InvalidDataViews(
                 "Unable to create a Texture using 0 data views".to_string(),
             ));
         }
 
-        let view = data_slices[0];
-
         let offset = descriptor.texture_offset as usize;
-
         let size = descriptor.texture_size as usize;
 
-        let end = (size + offset) as usize;
+        let bytes = match virtual_res.get_bytes(offset, size) {
+            Ok(b) => b,
+            Err(e) => {
+                match e {
+                    VirtualResourceError::OffsetOutOfBounds => {
+                        return Err(AssetParseError::InvalidDataViews(format!(
+                            "Offset {} is out of bounds for virtual resource of size {}",
+                            offset,
+                            virtual_res.len()
+                        )));
+                    }
 
-        if view.len() < end {
-            return Err(AssetParseError::InvalidDataViews(format!(
-                "Required {} bytes for texture ({} available in view)",
-                size,
-                view.len()
-            )));
-        } else if view.len() > end {
-            /* TODO: Make this not print out, or implement log levels. This message can clog up the
-             * terminal easily.
-            println!(
-                "The data view being used for texture {} is too large. There may be a mismatch between the texture's descriptor and the input data. Continuing with the required amount only.",
-                name
-            );
-            */
-        }
-
-        let mut data_vec = view[offset..end].to_owned();
-
-        if data_vec.len() < size {
-            data_vec.resize(size, 0xFF);
-        }
+                    VirtualResourceError::SizeOutOfBounds => {
+                        return Err(AssetParseError::InvalidDataViews(format!(
+                            "Size would reach offset {}, which is out of bounds for virtual resource of size {}",
+                            offset + size,
+                            virtual_res.len()
+                        )));
+                    }
+                };
+            }
+        };
 
         Ok(Texture {
             name: name.to_string(),
             descriptor: descriptor.clone(),
-            data: data_vec,
+            data: bytes,
         })
     }
 

@@ -3,7 +3,7 @@ use std::{
     io,
 };
 
-use crate::{DataView, game::AssetType};
+use crate::{DataView, VirtualResource, game::AssetType};
 
 pub mod model;
 pub mod texture;
@@ -96,6 +96,18 @@ impl DataViewList {
             })
             .collect())
     }
+
+    pub fn views(&self) -> &[DataView] {
+        &self.views
+    }
+
+    pub fn num_views(&self) -> u32 {
+        self.num_views
+    }
+
+    pub fn size(&self) -> u32 {
+        self.size
+    }
 }
 
 #[derive(Debug)]
@@ -166,7 +178,7 @@ pub trait Asset: Sized {
     fn new(
         name: &str,
         descriptor: &Self::Descriptor,
-        data_slices: &[&[u8]],
+        virtual_res: &VirtualResource,
     ) -> Result<Self, AssetParseError>;
 
     fn asset_type() -> AssetType;
