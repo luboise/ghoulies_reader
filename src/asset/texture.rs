@@ -22,10 +22,36 @@ pub struct TextureDescriptor {
     tile_count: u32,
     unknown_3c: u32,
     texture_offset: u32,
-    data_size: u32,
+    texture_size: u32,
 }
 
 impl TextureDescriptor {
+    pub fn new(
+        format: D3DFormat,
+        header_size: u32,
+        width: u16,
+        height: u16,
+        flags: u32,
+        unknown_3a: u32,
+        tile_count: u32,
+        unknown_3c: u32,
+        texture_offset: u32,
+        texture_size: u32,
+    ) -> Self {
+        Self {
+            format,
+            header_size,
+            width,
+            height,
+            flags,
+            unknown_3a,
+            tile_count,
+            unknown_3c,
+            texture_offset,
+            texture_size,
+        }
+    }
+
     pub fn format(&self) -> D3DFormat {
         self.format
     }
@@ -43,9 +69,9 @@ pub struct Texture {
 }
 
 impl AssetDescriptor for TextureDescriptor {
-    fn from_bytes(data: &[u8]) -> Result<Self, AssetError> {
+    fn from_bytes(data: &[u8]) -> Result<Self, AssetParseError> {
         if data.len() < size_of::<TextureDescriptor>() {
-            return Err(AssetError::ParseError(AssetParseError::InputTooSmall));
+            return Err(AssetParseError::InputTooSmall);
         }
 
         let format = match u32::from_le_bytes(data[0..4].try_into().unwrap()) {
@@ -71,7 +97,7 @@ impl AssetDescriptor for TextureDescriptor {
         let tile_count = u32::from_le_bytes(data[20..24].try_into().unwrap());
         let unknown_3c = u32::from_le_bytes(data[24..28].try_into().unwrap());
         let texture_offset = u32::from_le_bytes(data[28..32].try_into().unwrap());
-        let data_size = u32::from_le_bytes(data[32..36].try_into().unwrap());
+        let texture_size = u32::from_le_bytes(data[32..36].try_into().unwrap());
 
         Ok(TextureDescriptor {
             format,
@@ -83,7 +109,7 @@ impl AssetDescriptor for TextureDescriptor {
             tile_count,
             unknown_3c,
             texture_offset,
-            data_size,
+            texture_size,
         })
     }
 }
@@ -100,10 +126,6 @@ impl Asset for Texture {
             return Err(AssetParseError::InvalidDataViews(
                 "Unable to create a Texture using 0 data views".to_string(),
             ));
-        } else if data_slices.len() > 1 {
-            println!(
-                "A texture was attempted to created from multiple views. Continuing with the first slice."
-            );
         }
 
         let view = data_slices[0];

@@ -1,10 +1,11 @@
 use std::{
-    fmt::{self, Display, Write},
+    fmt::{self, Display},
     io,
 };
 
 use crate::{DataView, game::AssetType};
 
+pub mod model;
 pub mod texture;
 
 #[derive(Debug, Clone)]
@@ -114,6 +115,12 @@ impl Display for AssetParseError {
     }
 }
 
+impl From<std::io::Error> for AssetParseError {
+    fn from(value: std::io::Error) -> Self {
+        AssetParseError::InvalidDataViews("IO error occurred when parsing Asset.".to_string())
+    }
+}
+
 #[derive(Debug)]
 pub enum AssetError {
     /// The asset was found, but could not be parsed from the bytes of the [`crate::BNLFile`].
@@ -148,12 +155,8 @@ impl From<AssetParseError> for AssetError {
 /// resource.
 pub trait AssetDescriptor: Sized + Clone {
     /// Creates a new AssetDescriptor from bytes.
-    ///
-    /// # Errors
-    /// -
-    ///
-    /// This function will return an error if .
-    fn from_bytes(data: &[u8]) -> Result<Self, AssetError>;
+    /// TODO: Finish the docs here
+    fn from_bytes(data: &[u8]) -> Result<Self, AssetParseError>;
 }
 
 pub trait Asset: Sized {

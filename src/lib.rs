@@ -414,14 +414,6 @@ impl BNLFile {
             let desc_bytes: Vec<u8> =
                 self.descriptor_bytes[desc_ptr..desc_ptr + desc_size].to_vec();
 
-            /*
-                .map_err(|e| {
-                    AssetError::AssetParseError(AssetParseError::InvalidDataViews(
-                        "bruh".to_string(),
-                    ))
-                })?;
-            */
-
             let dvl = self
                 .get_dataview_list(asset_desc.dataview_list_ptr as usize)
                 .map_err(|_| {
