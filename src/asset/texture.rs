@@ -168,14 +168,29 @@ impl Asset for Texture {
     }
 }
 
+#[derive(Clone)]
+pub struct Image {
+    width: usize,
+    height: usize,
+    bytes: Vec<u8>,
+}
+
+impl Image {
+    pub fn width(&self) -> usize {
+        self.width
+    }
+
+    pub fn height(&self) -> usize {
+        self.height
+    }
+
+    pub fn bytes(&self) -> &[u8] {
+        &self.bytes
+    }
+}
+
 impl Texture {
-    pub fn dump(&self, path: &Path) -> Result<(), std::io::Error> {
-        let mut p: PathBuf = path.to_path_buf();
-
-        if p.is_dir() {
-            p = p.join(format!("{}.png", self.name()));
-        }
-
+    pub fn to_rgba_image(&self) -> Result<Image, std::io::Error> {
         let mut bytes: Vec<u8> = self.data.clone();
 
         let desired_format: D3DFormat = match self.descriptor.format {
@@ -204,7 +219,17 @@ impl Texture {
             )?;
         }
 
-        let file = File::create(p).unwrap();
+        Ok(Image {
+            width: self.descriptor.width as usize,
+            height: self.descriptor.height as usize,
+            bytes,
+        })
+    }
+
+    pub fn dump(&self, path: &Path) -> Result<(), std::io::Error> {
+        let image = self.to_rgba_image()?;
+
+        let file = File::create(path).unwrap();
         let w = &mut BufWriter::new(file);
 
         let mut encoder = png::Encoder::new(
@@ -235,7 +260,7 @@ impl Texture {
 
         let mut writer = encoder.write_header().unwrap();
 
-        writer.write_image_data(&bytes)?;
+        writer.write_image_data(&image.bytes)?;
         writer.finish().expect("Unable to close writer");
 
         Ok(())

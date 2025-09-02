@@ -369,6 +369,7 @@ impl BNLFile {
 
                 return Ok(RawAsset {
                     name: asset_desc.name().to_string(),
+                    asset_type: asset_desc.asset_type,
                     descriptor_bytes: desc_bytes,
                     data_slices: slices.iter().map(|s| s.to_vec()).collect(),
                 });
@@ -426,6 +427,7 @@ impl BNLFile {
 
             Ok(RawAsset {
                 name: asset_desc.name().to_string(),
+                asset_type: asset_desc.asset_type,
                 descriptor_bytes: desc_bytes,
                 data_slices: slices.iter().map(|s| s.to_vec()).collect(),
             })

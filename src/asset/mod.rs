@@ -11,6 +11,7 @@ pub mod texture;
 #[derive(Debug, Clone)]
 pub struct RawAsset {
     pub name: String,
+    pub asset_type: AssetType,
     pub descriptor_bytes: Vec<u8>,
     pub data_slices: Vec<Vec<u8>>,
 }
