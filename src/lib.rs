@@ -218,6 +218,11 @@ impl BNLFile {
             new_bnl.asset_descriptions.push(asset_desc);
         }
 
+        let loc = &new_bnl.header.asset_desc_loc;
+        cur.seek(SeekFrom::Start(loc.offset.into()))?;
+        new_bnl.asset_desc_bytes.resize(loc.size as usize, 0);
+        cur.read_exact(&mut new_bnl.asset_desc_bytes)?;
+
         let loc = &new_bnl.header.buffer_views_loc;
         cur.seek(SeekFrom::Start(loc.offset.into()))?;
         new_bnl.buffer_views_bytes.resize(loc.size as usize, 0);
@@ -244,7 +249,7 @@ impl BNLFile {
         decompressed_bytes.extend_from_slice(&self.buffer_bytes);
         decompressed_bytes.extend_from_slice(&self.descriptor_bytes);
 
-        let compressed_bytes = miniz_oxide::deflate::compress_to_vec_zlib(&decompressed_bytes, 5u8);
+        let compressed_bytes = miniz_oxide::deflate::compress_to_vec_zlib(&decompressed_bytes, 1);
 
         let mut bytes = vec![0; compressed_bytes.len() + 40];
 
@@ -505,6 +510,31 @@ impl BNLFile {
         assets
     }
 
+    pub fn update_asset<A: Asset>(&mut self, name: &str, asset: &A) -> Result<(), AssetError> {
+        for asset_desc in &self.asset_descriptions {
+            if asset_desc.name() == name {
+                if asset_desc.asset_type() != A::asset_type() {
+                    return Err(AssetError::TypeMismatch);
+                }
+
+                let dvl = self
+                    .get_dataview_list(asset_desc.dataview_list_ptr as usize)
+                    .map_err(|_| {
+                        AssetError::ParseError(AssetParseError::InvalidDataViews(
+                            "Unable to get data view list from BNL data.".to_string(),
+                        ))
+                    })?;
+
+                dvl.write_bytes(&asset.resource_data(), &mut self.buffer_bytes)
+                    .map_err(|_| AssetError::ParseError(AssetParseError::ErrorParsingDescriptor))?;
+
+                return Ok(());
+            }
+        }
+
+        Err(AssetError::NotFound)
+    }
+
     /// Returns a reference to the asset descriptions of this [`BNLFile`].
     pub fn asset_descriptions(&self) -> &[AssetDescription] {
         &self.asset_descriptions
@@ -647,7 +677,7 @@ mod tests {
     const DATA: [u8; 1000] = make_data::<1000>();
 
     #[test]
-    fn across_slices() {
+    fn read_across_slices() {
         let slices = [
             &DATA[0..100],
             &DATA[200..300],

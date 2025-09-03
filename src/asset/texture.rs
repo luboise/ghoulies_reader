@@ -4,12 +4,14 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use texpresso::{Algorithm::RangeFit, Format::Bc1, Format::Bc2};
+
 use crate::{
     VirtualResource, VirtualResourceError,
     asset::{Asset, AssetDescriptor, AssetParseError},
     d3d::{D3DFormat, LinearColour, PixelBits, StandardFormat, Swizzled},
     game::AssetType,
-    images,
+    images::{self, transcode},
 };
 
 const TEXTURE_DESCRIPTOR_SIZE: usize = 28;
@@ -56,6 +58,21 @@ impl TextureDescriptor {
     pub fn required_size(&self) -> usize {
         (self.width as usize * self.height as usize * self.format.bits_per_pixel()).div_ceil(8)
     }
+
+    pub fn width(&self) -> u16 {
+        self.width
+    }
+
+    pub fn height(&self) -> u16 {
+        self.height
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum TextureError {
+    SizeMismatch,
+    InvalidInput,
+    UnsupportedOutputType,
 }
 
 #[derive(Debug)]
@@ -166,6 +183,10 @@ impl Asset for Texture {
     fn name(&self) -> &str {
         &self.name
     }
+
+    fn resource_data(&self) -> Vec<u8> {
+        self.data.clone()
+    }
 }
 
 #[derive(Clone)]
@@ -190,6 +211,40 @@ impl Image {
 }
 
 impl Texture {
+    pub fn set_from_rgba(
+        &mut self,
+        width: usize,
+        height: usize,
+        data: &[u8],
+    ) -> Result<(), TextureError> {
+        if data.len() < width * height * 4 {
+            return Err(TextureError::SizeMismatch);
+        } else if width != self.descriptor.width as usize
+            || height != self.descriptor.height as usize
+        {
+            return Err(TextureError::SizeMismatch);
+        }
+
+        let transcoded = images::transcode(
+            self.descriptor.width as usize,
+            self.descriptor.height as usize,
+            D3DFormat::Swizzled(Swizzled::R8G8B8A8),
+            self.descriptor.format,
+            &data,
+        )
+        .map_err(|_| {
+            eprintln!(
+                "Unable to convert from RGBA to format {:?}",
+                self.descriptor.format
+            );
+            TextureError::UnsupportedOutputType
+        })?;
+
+        self.data = transcoded;
+
+        Ok(())
+    }
+
     pub fn to_rgba_image(&self) -> Result<Image, std::io::Error> {
         let mut bytes: Vec<u8> = self.data.clone();
 

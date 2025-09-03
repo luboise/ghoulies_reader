@@ -1,9 +1,10 @@
 use std::{
+    cmp,
     fmt::{self, Display},
     io,
 };
 
-use crate::{DataView, VirtualResource, game::AssetType};
+use crate::{DataView, VirtualResource, VirtualResourceError, game::AssetType};
 
 pub mod model;
 pub mod texture;
@@ -98,6 +99,61 @@ impl DataViewList {
             .collect())
     }
 
+    pub fn write_bytes(
+        &self,
+        bytes: &[u8],
+        resource: &mut Vec<u8>,
+    ) -> Result<(), VirtualResourceError> {
+        let dvl_size = self.len();
+        let write_size = bytes.len();
+
+        if dvl_size != write_size {
+            eprintln!("Write size does not match dvl.");
+            return Err(VirtualResourceError::SizeOutOfBounds);
+        }
+
+        /*
+        if end < write_offset {
+            return Err(VirtualResourceError::OffsetOutOfBounds);
+        } else if end - write_offset < write_size {
+            return Err(VirtualResourceError::SizeOutOfBounds);
+        }
+        */
+
+        let mut total_written = 0usize;
+
+        for view in self.views() {
+            let view_size = view.size as usize;
+
+            // If this slice is part of the copy in any way
+            let res_slice =
+                &mut resource[view.offset as usize..view.offset as usize + view.size as usize];
+
+            let desired_cp_size = write_size - total_written;
+            let cp_size = cmp::min(desired_cp_size, view_size);
+
+            res_slice[..cp_size].copy_from_slice(&bytes[total_written..total_written + cp_size]);
+
+            total_written += cp_size;
+
+            if total_written > write_size {
+                return Err(VirtualResourceError::SizeOutOfBounds);
+            } else if total_written == write_size {
+                break;
+            }
+        }
+
+        if total_written != write_size {
+            return Err(VirtualResourceError::SizeOutOfBounds);
+        }
+
+        Ok(())
+    }
+
+    pub fn len(&self) -> usize {
+        self.views().iter().map(|view| view.size as usize).sum()
+    }
+
     pub fn views(&self) -> &[DataView] {
         &self.views
     }
@@ -181,6 +237,8 @@ pub trait Asset: Sized {
         descriptor: &Self::Descriptor,
         virtual_res: &VirtualResource,
     ) -> Result<Self, AssetParseError>;
+
+    fn resource_data(&self) -> Vec<u8>;
 
     fn asset_type() -> AssetType;
 

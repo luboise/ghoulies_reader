@@ -186,6 +186,10 @@ impl Asset for Model {
     fn name(&self) -> &str {
         &self.name
     }
+
+    fn resource_data(&self) -> Vec<u8> {
+        todo!()
+    }
 }
 
 pub trait Subresource {}

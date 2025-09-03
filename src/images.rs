@@ -1,5 +1,7 @@
 use crate::d3d::{D3DFormat, LinearColour, StandardFormat, Swizzled};
 
+use texpresso::{Algorithm::RangeFit, Format::Bc1, Format::Bc2};
+
 pub fn transcode(
     width: usize,
     height: usize,
@@ -96,6 +98,134 @@ pub fn transcode(
                 "Unsupported destination format for transcoding.",
             )),
         },
+
+        D3DFormat::Swizzled(Swizzled::R8G8B8A8) => match dst_format {
+            D3DFormat::Standard(StandardFormat::DXT1) => {
+                let mut data_copy = vec![0x00; bytes.len()];
+
+                for (i, chunk) in bytes.chunks_exact(4).enumerate() {
+                    let j = 4 * i;
+
+                    data_copy[j] = chunk[2];
+                    data_copy[j + 1] = chunk[1];
+                    data_copy[j + 2] = chunk[0];
+                    data_copy[j + 3] = chunk[3];
+                }
+
+                let mut converted_bytes = vec![0x00; Bc1.compressed_size(width, height)];
+
+                Bc1.compress(
+                    &data_copy,
+                    width,
+                    height,
+                    texpresso::Params {
+                        ..Default::default()
+                    },
+                    &mut converted_bytes,
+                );
+
+                Ok(converted_bytes)
+            }
+
+            D3DFormat::Standard(StandardFormat::DXT2Or3) => {
+                let mut data_copy = vec![0x00; bytes.len()];
+
+                for (i, chunk) in bytes.chunks_exact(4).enumerate() {
+                    let j = 4 * i;
+
+                    data_copy[j] = chunk[2];
+                    data_copy[j + 1] = chunk[1];
+                    data_copy[j + 2] = chunk[0];
+                    data_copy[j + 3] = chunk[3];
+                }
+
+                let mut converted_bytes = vec![0x00; Bc2.compressed_size(width, height)];
+
+                Bc2.compress(
+                    &data_copy,
+                    width,
+                    height,
+                    texpresso::Params {
+                        ..Default::default()
+                    },
+                    &mut converted_bytes,
+                );
+
+                Ok(converted_bytes)
+            }
+
+            D3DFormat::Swizzled(Swizzled::B8G8R8A8) => {
+                let mut data_copy = vec![0x00; bytes.len()];
+
+                for (i, chunk) in bytes.chunks_exact(4).enumerate() {
+                    let j = 4 * i;
+
+                    data_copy[j] = chunk[2];
+                    data_copy[j + 1] = chunk[1];
+                    data_copy[j + 2] = chunk[0];
+                    data_copy[j + 3] = chunk[3];
+                }
+
+                Ok(data_copy)
+            }
+
+            _ => Err(std::io::Error::other(
+                "Unsupported source format for transcoding.",
+            )),
+        },
+
+        D3DFormat::Swizzled(Swizzled::B8G8R8A8) => match dst_format {
+            D3DFormat::Standard(StandardFormat::DXT1) => {
+                let mut converted_bytes = vec![0x00; Bc1.compressed_size(width, height)];
+
+                Bc1.compress(
+                    bytes,
+                    width,
+                    height,
+                    texpresso::Params {
+                        ..Default::default()
+                    },
+                    &mut converted_bytes,
+                );
+
+                Ok(converted_bytes)
+            }
+            D3DFormat::Standard(StandardFormat::DXT2Or3) => {
+                let mut converted_bytes = vec![0x00; Bc2.compressed_size(width, height)];
+
+                Bc2.compress(
+                    bytes,
+                    width,
+                    height,
+                    texpresso::Params {
+                        ..Default::default()
+                    },
+                    &mut converted_bytes,
+                );
+
+                Ok(converted_bytes)
+            }
+
+            D3DFormat::Swizzled(Swizzled::R8G8B8A8) => {
+                let mut data_copy = vec![0x00; bytes.len()];
+
+                for (i, chunk) in bytes.chunks_exact(4).enumerate() {
+                    let j = 4 * i;
+
+                    data_copy[j] = chunk[2];
+                    data_copy[j + 1] = chunk[1];
+                    data_copy[j + 2] = chunk[0];
+                    data_copy[j + 3] = chunk[3];
+                }
+
+                Ok(data_copy)
+            }
+
+            _ => Err(std::io::Error::other(
+                "Unsupported source format for transcoding.",
+            )),
+        },
+
         _ => Err(std::io::Error::other(
             "Unsupported source format for transcoding.",
         )),
