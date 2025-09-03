@@ -189,6 +189,7 @@ pub trait Asset: Sized {
 
 pub type AssetName = [u8; 128];
 
+#[derive(Clone)]
 pub struct AssetDescription {
     pub(crate) name: AssetName,
     pub(crate) asset_type: AssetType,

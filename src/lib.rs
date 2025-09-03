@@ -4,7 +4,7 @@ pub(crate) mod images;
 
 pub mod asset;
 
-use byteorder::{LittleEndian, ReadBytesExt};
+use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
 use std::{
     cmp,
@@ -89,6 +89,42 @@ struct BNLHeader {
     buffer_views_loc: DataView,
     buffer_loc: DataView,
     descriptor_loc: DataView,
+}
+
+impl BNLHeader {
+    pub fn to_bytes(&self) -> [u8; 40] {
+        let mut bytes = [0x00; 40];
+
+        let mut cur = Cursor::new(&mut bytes[..]);
+
+        cur.write_u16::<LittleEndian>(self.file_count).unwrap();
+        cur.write_u8(self.flags).unwrap();
+
+        self.unknown_2.iter().for_each(|val| {
+            cur.write_u8(*val).unwrap();
+        });
+
+        cur.write_u32::<LittleEndian>(self.asset_desc_loc.offset)
+            .unwrap();
+        cur.write_u32::<LittleEndian>(self.asset_desc_loc.size)
+            .unwrap();
+
+        cur.write_u32::<LittleEndian>(self.buffer_views_loc.offset)
+            .unwrap();
+        cur.write_u32::<LittleEndian>(self.buffer_views_loc.size)
+            .unwrap();
+
+        cur.write_u32::<LittleEndian>(self.buffer_loc.offset)
+            .unwrap();
+        cur.write_u32::<LittleEndian>(self.buffer_loc.size).unwrap();
+
+        cur.write_u32::<LittleEndian>(self.descriptor_loc.offset)
+            .unwrap();
+        cur.write_u32::<LittleEndian>(self.descriptor_loc.size)
+            .unwrap();
+
+        bytes
+    }
 }
 
 #[derive(Debug, Default)]
@@ -198,6 +234,24 @@ impl BNLFile {
         cur.read_exact(&mut new_bnl.descriptor_bytes)?;
 
         Ok(new_bnl)
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut decompressed_bytes = Vec::new();
+
+        decompressed_bytes.extend_from_slice(&self.asset_desc_bytes);
+        decompressed_bytes.extend_from_slice(&self.buffer_views_bytes);
+        decompressed_bytes.extend_from_slice(&self.buffer_bytes);
+        decompressed_bytes.extend_from_slice(&self.descriptor_bytes);
+
+        let compressed_bytes = miniz_oxide::deflate::compress_to_vec_zlib(&decompressed_bytes, 5u8);
+
+        let mut bytes = vec![0; compressed_bytes.len() + 40];
+
+        bytes[0..40].copy_from_slice(&self.header.to_bytes());
+        bytes[40..].copy_from_slice(&compressed_bytes);
+
+        bytes
     }
 
     /// Retrieves an asset by name and type, creating it from the bytes of the BNL file.
