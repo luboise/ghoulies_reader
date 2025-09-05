@@ -29,6 +29,7 @@ version = "0.1.0"
 dependencies = [
  "bcndecode",
  "byteorder",
+ "indexmap",
  "miniz_oxide",
  "num_enum",
  "png",

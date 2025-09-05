@@ -19,7 +19,7 @@ const TEXTURE_DESCRIPTOR_SIZE: usize = 28;
 #[derive(Debug, Clone)]
 pub struct TextureDescriptor {
     format: D3DFormat,
-    header_size: u32, // 28
+    header_size: u32, // 0x1c
     width: u16,
     height: u16,
     flags: u32, // 0x00000001
@@ -65,6 +65,26 @@ impl TextureDescriptor {
 
     pub fn height(&self) -> u16 {
         self.height
+    }
+
+    pub fn header_size(&self) -> u32 {
+        self.header_size
+    }
+
+    pub fn flags(&self) -> u32 {
+        self.flags
+    }
+
+    pub fn unknown_3a(&self) -> u32 {
+        self.unknown_3a
+    }
+
+    pub fn texture_offset(&self) -> u32 {
+        self.texture_offset
+    }
+
+    pub fn texture_size(&self) -> u32 {
+        self.texture_size
     }
 }
 

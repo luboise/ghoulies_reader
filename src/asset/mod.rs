@@ -7,6 +7,7 @@ use std::{
 use crate::{DataView, VirtualResource, VirtualResourceError, game::AssetType};
 
 pub mod model;
+pub mod script;
 pub mod texture;
 
 #[derive(Debug, Clone)]

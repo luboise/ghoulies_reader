@@ -642,6 +642,21 @@ where {
         Ok(v)
     }
 
+    pub fn get_all_bytes(&self) -> Vec<u8> {
+        let mut bytes = vec![0x00; self.len()];
+
+        let mut curr = 0usize;
+        for slice in &self.slices {
+            let copy_size = slice.len();
+
+            bytes[curr..curr + copy_size].copy_from_slice(&slice);
+
+            curr += copy_size;
+        }
+
+        bytes
+    }
+
     pub(crate) fn from_slices<'a>(slices: &'a [&[u8]]) -> VirtualResource<'a> {
         VirtualResource {
             slices: slices.to_vec(),
