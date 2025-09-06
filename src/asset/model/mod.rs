@@ -142,6 +142,18 @@ impl AssetDescriptor for ModelDescriptor {
             texture_descriptors,
         })
     }
+
+    fn to_bytes(&self) -> Result<Vec<u8>, AssetParseError> {
+        todo!()
+    }
+
+    fn size(&self) -> usize {
+        todo!()
+    }
+
+    fn asset_type() -> AssetType {
+        AssetType::ResModel
+    }
 }
 
 impl Asset for Model {
@@ -177,10 +189,6 @@ impl Asset for Model {
 
     fn descriptor(&self) -> &Self::Descriptor {
         &self.descriptor
-    }
-
-    fn asset_type() -> AssetType {
-        AssetType::ResModel
     }
 
     fn name(&self) -> &str {

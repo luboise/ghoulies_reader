@@ -1,8 +1,9 @@
-use std::io::{Cursor, Read};
+use std::io::{Cursor, Read, Write};
 
-use byteorder::{LittleEndian, ReadBytesExt};
+use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
+
 use indexmap::IndexMap;
-use num_enum::TryFromPrimitive;
+use num_enum::{IntoPrimitive, TryFromPrimitive};
 
 use crate::{
     VirtualResource,
@@ -18,6 +19,10 @@ pub struct ScriptDescriptor {
 impl ScriptDescriptor {
     pub fn operations(&self) -> &[ScriptOperation] {
         &self.operations
+    }
+
+    pub fn operations_mut(&mut self) -> &mut Vec<ScriptOperation> {
+        &mut self.operations
     }
 }
 
@@ -35,10 +40,19 @@ pub struct Script {
     data: Vec<u8>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ScriptOpcode {
     Known(KnownOpcode),
     Unknown(u32),
+}
+
+impl Into<u32> for ScriptOpcode {
+    fn into(self) -> u32 {
+        match self {
+            ScriptOpcode::Known(known_opcode) => known_opcode.into(),
+            ScriptOpcode::Unknown(val) => val,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -65,12 +79,26 @@ impl ScriptOperation {
         &self.operand_bytes
     }
 
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let size = self.operand_bytes.len() + 8;
+
+        let mut bytes = vec![0x00; size];
+
+        let mut cur = Cursor::new(&mut bytes[..]);
+
+        cur.write_u32::<LittleEndian>(size as u32);
+        cur.write_u32::<LittleEndian>(self.opcode.into());
+        cur.write_all(self.operand_bytes());
+
+        bytes
+    }
+
     pub fn operand_bytes_mut(&mut self) -> &mut Vec<u8> {
         &mut self.operand_bytes
     }
 }
 
-#[derive(Debug, Clone, TryFromPrimitive)]
+#[derive(Debug, Clone, Copy, TryFromPrimitive, IntoPrimitive, PartialEq)]
 #[repr(u32)]
 pub enum KnownOpcode {
     EndScript = 0x0,
@@ -131,6 +159,10 @@ impl AssetDescriptor for ScriptDescriptor {
         let mut opcode = cur.read_u32::<LittleEndian>()?;
 
         while opcode != 0 {
+            if size < 8 {
+                return Err(AssetParseError::ErrorParsingDescriptor);
+            }
+
             let mut operand_bytes = vec![0x00; (size as usize) - 8];
             cur.read_exact(&mut operand_bytes)?;
 
@@ -144,8 +176,38 @@ impl AssetDescriptor for ScriptDescriptor {
             opcode = cur.read_u32::<LittleEndian>()?;
         }
 
+        if size == 8 && opcode == 0 {
+            operations.push(ScriptOperation {
+                size: 8,
+                opcode: ScriptOpcode::Known(KnownOpcode::EndScript),
+                operand_bytes: [].to_vec(),
+            });
+        } else {
+            // Size mismatch
+            return Err(AssetParseError::ErrorParsingDescriptor);
+        }
+
         // TODO: Sanity check the read length here
         Ok(ScriptDescriptor { operations })
+    }
+
+    fn to_bytes(&self) -> Result<Vec<u8>, AssetParseError> {
+        let mut bytes = Vec::new();
+
+        self.operations
+            .iter()
+            .map(|op| op.to_bytes())
+            .for_each(|b| bytes.extend_from_slice(&b));
+
+        Ok(bytes)
+    }
+
+    fn size(&self) -> usize {
+        self.operations().iter().map(|v| v.size() as usize).sum()
+    }
+
+    fn asset_type() -> AssetType {
+        AssetType::ResScript
     }
 }
 
@@ -213,10 +275,6 @@ impl Asset for Script {
 
     fn descriptor(&self) -> &Self::Descriptor {
         &self.descriptor
-    }
-
-    fn asset_type() -> AssetType {
-        AssetType::ResScript
     }
 
     fn name(&self) -> &str {

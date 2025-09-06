@@ -11,12 +11,13 @@ use std::{
     error::Error,
     fmt::Display,
     io::{Cursor, Read, Seek, SeekFrom},
+    ops::Range,
 };
 
 use crate::{
     asset::{
-        Asset, AssetDescription, AssetDescriptor, AssetError, AssetName, AssetParseError,
-        DataViewList, RawAsset,
+        ASSET_DESCRIPTION_SIZE, Asset, AssetDescription, AssetDescriptor, AssetError, AssetName,
+        AssetParseError, DataViewList, RawAsset,
     },
     game::AssetType,
 };
@@ -39,24 +40,6 @@ impl DataView {
 
         Ok(DataView { offset, size })
     }
-}
-
-macro_rules! read {
-    ($file:expr, u8) => {
-        $file.read_u8()?
-    };
-    ($file:expr, u16) => {
-        $file.read_u16::<LittleEndian>()?
-    };
-    ($file:expr, u32) => {
-        $file.read_u32::<LittleEndian>()?
-    };
-    ($file:expr, u64) => {
-        $file.read_u64::<LittleEndian>()?
-    };
-    ($file:expr, i32) => {
-        $file.read_i32::<LittleEndian>()?
-    };
 }
 
 #[derive(Debug)]
@@ -164,8 +147,8 @@ impl BNLFile {
         let mut cur = Cursor::new(bnl_bytes);
 
         let mut header = BNLHeader {
-            file_count: read!(cur, u16),
-            flags: read!(cur, u8),
+            file_count: cur.read_u16::<LittleEndian>()?,
+            flags: cur.read_u8()?,
             ..Default::default()
         };
 
@@ -187,32 +170,17 @@ impl BNLFile {
             ..Default::default()
         };
 
-        assert_eq!(size_of::<AssetDescription>(), 160);
-
-        let num_descriptions =
-            new_bnl.header.asset_desc_loc.size as usize / size_of::<AssetDescription>();
+        let num_descriptions = new_bnl.header.asset_desc_loc.size as usize / ASSET_DESCRIPTION_SIZE;
 
         cur.seek(SeekFrom::Start(new_bnl.header.asset_desc_loc.offset as u64))?;
 
-        for _ in 0..num_descriptions {
-            let mut asset_name: AssetName = [0x00; 128];
-
-            cur.read_exact(&mut asset_name)?;
+        for i in 0..num_descriptions {
+            let mut bytes = [0x00; ASSET_DESCRIPTION_SIZE];
+            cur.read_exact(&mut bytes)?;
 
             // TODO: Rework this into an actual constructor
-            let asset_desc = AssetDescription {
-                name: asset_name,
-                asset_type: AssetType::try_from(read!(cur, u32)).map_err(|_| {
-                    BNLError::DataReadError("Unable to parse asset type from BNL.".to_string())
-                })?,
-                unk_1: read!(cur, u32),
-                unk_2: read!(cur, u32),
-                chunk_count: read!(cur, u32),
-                descriptor_ptr: read!(cur, u32),
-                descriptor_size: read!(cur, u32),
-                dataview_list_ptr: read!(cur, u32),
-                resource_size: read!(cur, u32),
-            };
+            let mut asset_desc = AssetDescription::from_bytes(&bytes)?;
+            asset_desc.asset_desc_index = i;
 
             // TODO: Resize this then push into it
             new_bnl.asset_descriptions.push(asset_desc);
@@ -535,6 +503,125 @@ impl BNLFile {
         Err(AssetError::NotFound)
     }
 
+    pub fn update_asset_from_descriptor<AD: AssetDescriptor>(
+        &mut self,
+        name: &str,
+        descriptor: &AD,
+        data: Option<&Vec<u8>>,
+    ) -> Result<(), AssetError> {
+        let mut asset_desc = self
+            .get_asset_description(name)
+            .ok_or(AssetError::NotFound)?
+            .clone();
+
+        if asset_desc.asset_type() != AD::asset_type() {
+            return Err(AssetError::TypeMismatch);
+        }
+
+        // Update the descriptor
+        let prev_descriptor: AD = self.get_descriptor(name)?;
+
+        let new_size = descriptor.size();
+        let prev_size = prev_descriptor.size();
+
+        if new_size > prev_size {
+            let start = asset_desc.descriptor_ptr as usize;
+            let end = start + new_size;
+
+            let occupants = self.get_assets_occupying_descriptor_range(start..end);
+
+            dbg!(occupants);
+
+            return Err(AssetError::ParseError(AssetParseError::InvalidDataViews(
+                "The descriptor can not grow in size. (WIP to allow descriptor growing.)"
+                    .to_string(),
+            )));
+        }
+
+        asset_desc.descriptor_size = new_size as u32;
+
+        let start: usize = asset_desc.descriptor_ptr as usize;
+        let end: usize = start + new_size;
+
+        // Update the descriptor section
+        self.descriptor_bytes[start..end].copy_from_slice(&descriptor.to_bytes()?);
+
+        // Update the dvl and resource sections
+        if let Some(data) = data {
+            let dvl = self
+                .get_dataview_list(asset_desc.dataview_list_ptr as usize)
+                .map_err(|_| {
+                    AssetError::ParseError(AssetParseError::InvalidDataViews(
+                        "Unable to get data view list from BNL data.".to_string(),
+                    ))
+                })?;
+
+            // TODO: Update the DVL section
+            dvl.write_bytes(data, &mut self.buffer_bytes)
+                .map_err(|_| AssetError::ParseError(AssetParseError::ErrorParsingDescriptor))?;
+        }
+
+        // Update the asset descriptions section
+        self.update_asset_description(&asset_desc)?;
+
+        Ok(())
+    }
+
+    pub fn get_asset_description(&self, name: &str) -> Option<&AssetDescription> {
+        self.asset_descriptions
+            .iter()
+            .find(|asset_desc| asset_desc.name() == name)
+    }
+
+    pub fn update_asset_description(
+        &mut self,
+        asset_desc: &AssetDescription,
+    ) -> Result<(), AssetError> {
+        let start: usize = asset_desc.asset_desc_index * ASSET_DESCRIPTION_SIZE;
+        let end: usize = start + ASSET_DESCRIPTION_SIZE;
+
+        self.asset_desc_bytes[start..end].copy_from_slice(&asset_desc.to_bytes());
+
+        Ok(())
+    }
+
+    pub fn get_descriptor<AD: AssetDescriptor>(&self, name: &str) -> Result<AD, AssetError> {
+        for asset_desc in &self.asset_descriptions {
+            if asset_desc.name() == name {
+                if asset_desc.asset_type() != AD::asset_type() {
+                    return Err(AssetError::TypeMismatch);
+                }
+
+                let descriptor_ptr: usize = asset_desc.descriptor_ptr() as usize;
+                let desc_slice = &self.descriptor_bytes[descriptor_ptr..];
+
+                let descriptor = AD::from_bytes(desc_slice)?;
+
+                return Ok(descriptor);
+            }
+        }
+
+        Err(AssetError::NotFound)
+    }
+
+    pub fn get_assets_occupying_descriptor_range(
+        &self,
+        range: Range<usize>,
+    ) -> Vec<&AssetDescription> {
+        self.asset_descriptions()
+            .iter()
+            .filter(|asset_desc| {
+                let start1 = range.start;
+                let end1 = range.end;
+
+                let start2 = asset_desc.descriptor_ptr as usize;
+                let end2 = start2 + asset_desc.descriptor_size as usize;
+
+                start1 < end2 && start2 < end1
+            })
+            .collect()
+    }
+
     /// Returns a reference to the asset descriptions of this [`BNLFile`].
     pub fn asset_descriptions(&self) -> &[AssetDescription] {
         &self.asset_descriptions
@@ -649,7 +736,7 @@ where {
         for slice in &self.slices {
             let copy_size = slice.len();
 
-            bytes[curr..curr + copy_size].copy_from_slice(&slice);
+            bytes[curr..curr + copy_size].copy_from_slice(slice);
 
             curr += copy_size;
         }

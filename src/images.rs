@@ -1,6 +1,6 @@
 use crate::d3d::{D3DFormat, LinearColour, StandardFormat, Swizzled};
 
-use texpresso::{Algorithm::RangeFit, Format::Bc1, Format::Bc2};
+use texpresso::{Format::Bc1, Format::Bc2};
 
 pub fn transcode(
     width: usize,

@@ -1,17 +1,17 @@
 use std::{
     fs::File,
-    io::BufWriter,
-    path::{Path, PathBuf},
+    io::{BufWriter, Cursor},
+    path::Path,
 };
 
-use texpresso::{Algorithm::RangeFit, Format::Bc1, Format::Bc2};
+use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
 use crate::{
     VirtualResource, VirtualResourceError,
     asset::{Asset, AssetDescriptor, AssetParseError},
     d3d::{D3DFormat, LinearColour, PixelBits, StandardFormat, Swizzled},
     game::AssetType,
-    images::{self, transcode},
+    images::{self},
 };
 
 const TEXTURE_DESCRIPTOR_SIZE: usize = 28;
@@ -55,7 +55,7 @@ impl TextureDescriptor {
         self.format
     }
 
-    pub fn required_size(&self) -> usize {
+    pub fn required_image_size(&self) -> usize {
         (self.width as usize * self.height as usize * self.format.bits_per_pixel()).div_ceil(8)
     }
 
@@ -108,7 +108,9 @@ impl AssetDescriptor for TextureDescriptor {
             return Err(AssetParseError::InputTooSmall);
         }
 
-        let format = match u32::from_le_bytes(data[0..4].try_into().unwrap()) {
+        let mut cur = Cursor::new(&data[..]);
+
+        let format = match cur.read_u32::<LittleEndian>()? {
             0x00000012 => D3DFormat::Swizzled(Swizzled::B8G8R8A8),
             0x0000003f => D3DFormat::Swizzled(Swizzled::A8B8G8R8),
             0x00000040 => D3DFormat::Linear(LinearColour::A8R8G8B8),
@@ -124,13 +126,13 @@ impl AssetDescriptor for TextureDescriptor {
             }
         };
 
-        let header_size = u32::from_le_bytes(data[4..8].try_into().unwrap());
-        let width = u16::from_le_bytes(data[8..10].try_into().unwrap());
-        let height = u16::from_le_bytes(data[10..12].try_into().unwrap());
-        let flags = u32::from_le_bytes(data[12..16].try_into().unwrap());
-        let unknown_3a = u32::from_le_bytes(data[16..20].try_into().unwrap());
-        let texture_offset = u32::from_le_bytes(data[20..24].try_into().unwrap());
-        let texture_size = u32::from_le_bytes(data[24..28].try_into().unwrap());
+        let header_size = cur.read_u32::<LittleEndian>()?;
+        let width = cur.read_u16::<LittleEndian>()?;
+        let height = cur.read_u16::<LittleEndian>()?;
+        let flags = cur.read_u32::<LittleEndian>()?;
+        let unknown_3a = cur.read_u32::<LittleEndian>()?;
+        let texture_offset = cur.read_u32::<LittleEndian>()?;
+        let texture_size = cur.read_u32::<LittleEndian>()?;
 
         Ok(TextureDescriptor {
             format,
@@ -142,6 +144,32 @@ impl AssetDescriptor for TextureDescriptor {
             texture_offset,
             texture_size,
         })
+    }
+
+    fn size(&self) -> usize {
+        TEXTURE_DESCRIPTOR_SIZE
+    }
+
+    fn asset_type() -> AssetType {
+        AssetType::ResTexture
+    }
+
+    fn to_bytes(&self) -> Result<Vec<u8>, AssetParseError> {
+        let mut bytes = vec![0x00; TEXTURE_DESCRIPTOR_SIZE];
+
+        let mut cur = Cursor::new(&mut bytes[..]);
+
+        cur.write_u32::<LittleEndian>(self.format().into());
+
+        cur.write_u32::<LittleEndian>(self.header_size);
+        cur.write_u16::<LittleEndian>(self.width);
+        cur.write_u16::<LittleEndian>(self.height);
+        cur.write_u32::<LittleEndian>(self.flags);
+        cur.write_u32::<LittleEndian>(self.unknown_3a);
+        cur.write_u32::<LittleEndian>(self.texture_offset);
+        cur.write_u32::<LittleEndian>(self.texture_size);
+
+        Ok(bytes)
     }
 }
 
@@ -194,10 +222,6 @@ impl Asset for Texture {
 
     fn descriptor(&self) -> &Self::Descriptor {
         &self.descriptor
-    }
-
-    fn asset_type() -> AssetType {
-        AssetType::ResTexture
     }
 
     fn name(&self) -> &str {

@@ -1,10 +1,13 @@
+use num_enum::{IntoPrimitive, TryFromPrimitive};
+
 type BitCount = usize;
 
 pub trait PixelBits {
     fn bits_per_pixel(&self) -> BitCount;
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, TryFromPrimitive, IntoPrimitive)]
+#[repr(u32)]
 pub enum LinearColour {
     A1R5G5B5 = 0x00000010,
     A4R4G4B4 = 0x0000001D,
@@ -50,7 +53,8 @@ impl PixelBits for LinearColour {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, TryFromPrimitive, IntoPrimitive)]
+#[repr(u32)]
 pub enum LinearLuminance {
     A8L8 = 0x00000020,
     AL8 = 0x0000001B,
@@ -94,7 +98,8 @@ impl PixelBits for LinearLuminance {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, TryFromPrimitive, IntoPrimitive)]
+#[repr(u32)]
 pub enum Swizzled {
     /* Swizzled formats */
     A8R8G8B8 = 0x00000006,
@@ -142,7 +147,8 @@ impl PixelBits for Swizzled {
 }
 
 // TODO: Fix portability issue with enum
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, TryFromPrimitive, IntoPrimitive)]
+#[repr(u32)]
 pub enum StandardFormat {
     Unknown = 0xFFFFFFFF,
 
@@ -209,8 +215,8 @@ impl PixelBits for StandardFormat {
     }
 }
 
-#[repr(u32)]
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[repr(u32)]
 pub enum D3DFormat {
     Swizzled(Swizzled),
     Luminance(LinearLuminance),
@@ -220,6 +226,20 @@ pub enum D3DFormat {
     VertexData = 100,
     Index16 = 101,
     ForceDWORD = 0x7fffffff,
+}
+
+impl Into<u32> for D3DFormat {
+    fn into(self) -> u32 {
+        match self {
+            D3DFormat::Swizzled(v) => v.into(),
+            D3DFormat::Luminance(v) => v.into(),
+            D3DFormat::Standard(v) => v.into(),
+            D3DFormat::Linear(v) => v.into(),
+            D3DFormat::VertexData => 100,
+            D3DFormat::Index16 => 101,
+            D3DFormat::ForceDWORD => 0x7fffffff,
+        }
+    }
 }
 
 impl PixelBits for D3DFormat {

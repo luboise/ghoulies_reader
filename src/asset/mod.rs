@@ -1,10 +1,12 @@
 use std::{
     cmp,
     fmt::{self, Display},
-    io,
+    io::{self, Cursor, Read, Write},
 };
 
 use crate::{DataView, VirtualResource, VirtualResourceError, game::AssetType};
+
+use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
 pub mod model;
 pub mod script;
@@ -227,6 +229,13 @@ pub trait AssetDescriptor: Sized + Clone {
     /// Creates a new AssetDescriptor from bytes.
     /// TODO: Finish the docs here
     fn from_bytes(data: &[u8]) -> Result<Self, AssetParseError>;
+
+    fn to_bytes(&self) -> Result<Vec<u8>, AssetParseError>;
+
+    /// The serialised size of the descriptor in bytes
+    fn size(&self) -> usize;
+
+    fn asset_type() -> AssetType;
 }
 
 pub trait Asset: Sized {
@@ -241,12 +250,16 @@ pub trait Asset: Sized {
 
     fn resource_data(&self) -> Vec<u8>;
 
-    fn asset_type() -> AssetType;
+    fn asset_type() -> AssetType {
+        Self::Descriptor::asset_type()
+    }
 
     fn name(&self) -> &str;
 }
 
 pub type AssetName = [u8; 128];
+
+pub const ASSET_DESCRIPTION_SIZE: usize = 0xa0;
 
 #[derive(Clone)]
 pub struct AssetDescription {
@@ -261,9 +274,60 @@ pub struct AssetDescription {
     pub(crate) descriptor_size: u32,
     pub(crate) dataview_list_ptr: u32,
     pub(crate) resource_size: u32, // The total size needed for this asset, including its descriptor list
+
+    // DO NOT SERIALISE
+    pub(crate) asset_desc_index: usize,
 }
 
 impl AssetDescription {
+    pub fn from_bytes(bytes: &[u8]) -> Result<AssetDescription, std::io::Error> {
+        let mut cur = Cursor::new(&bytes);
+
+        let mut asset_name: AssetName = [0u8; 0x80];
+        cur.read_exact(&mut asset_name)?;
+
+        let asset_type = AssetType::try_from(cur.read_u32::<LittleEndian>()?)
+            .map_err(|_| std::io::Error::other("Unable to parse asset type from BNL."))?;
+
+        Ok(AssetDescription {
+            name: asset_name,
+            asset_type,
+            unk_1: cur.read_u32::<LittleEndian>()?,
+            unk_2: cur.read_u32::<LittleEndian>()?,
+            chunk_count: cur.read_u32::<LittleEndian>()?,
+            descriptor_ptr: cur.read_u32::<LittleEndian>()?,
+            descriptor_size: cur.read_u32::<LittleEndian>()?,
+            dataview_list_ptr: cur.read_u32::<LittleEndian>()?,
+            resource_size: cur.read_u32::<LittleEndian>()?,
+
+            // Default of max
+            asset_desc_index: usize::MAX,
+        })
+    }
+
+    pub fn to_bytes(&self) -> [u8; ASSET_DESCRIPTION_SIZE] {
+        let mut bytes = [0x00; ASSET_DESCRIPTION_SIZE];
+
+        let mut cur = Cursor::new(&mut bytes[..]);
+
+        // Ensure the size of the name is 128 so that we can safely unwrap
+        assert_eq!(size_of_val(&self.name), 0x80);
+        cur.write_all(&self.name).unwrap();
+
+        cur.write_u32::<LittleEndian>(self.asset_type.into())
+            .unwrap();
+        cur.write_u32::<LittleEndian>(self.unk_1).unwrap();
+        cur.write_u32::<LittleEndian>(self.unk_2).unwrap();
+        cur.write_u32::<LittleEndian>(self.chunk_count).unwrap();
+        cur.write_u32::<LittleEndian>(self.descriptor_ptr).unwrap();
+        cur.write_u32::<LittleEndian>(self.descriptor_size).unwrap();
+        cur.write_u32::<LittleEndian>(self.dataview_list_ptr)
+            .unwrap();
+        cur.write_u32::<LittleEndian>(self.resource_size).unwrap();
+
+        bytes
+    }
+
     pub fn name(&self) -> &str {
         std::str::from_utf8(&self.name)
             .unwrap_or("")
