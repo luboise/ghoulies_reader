@@ -42,6 +42,12 @@ pub struct Script {
     data: Vec<u8>,
 }
 
+impl Script {
+    pub fn descriptor_mut(&mut self) -> &mut ScriptDescriptor {
+        &mut self.descriptor
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ScriptOperation {
     size: u32,
